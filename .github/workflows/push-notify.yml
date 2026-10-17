@@ -1,40 +1,103 @@
-name: Push Notification to WeCom
+name: Update Data and Notify
 
 on:
   push:
-    branches: [ main ] # 确认这是你的分支
+    branches: [ main ]     # 当你手动 git push 时触发
+  schedule:
+    - cron: '0 0 * * *'    # 每天北京时间 08:00 自动触发 (UTC 00:00)
 
 jobs:
-  notify:
+  update-and-notify:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write      # 允许 Action 自动向仓库提交代码
     steps:
+      # 1. 拉取代码
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      # 2. 准备 Python 环境 (只有定时任务时才需要执行 Python)
+      - name: Set up Python
+        if: github.event_name == 'schedule'
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+          
+      # 3. 安装依赖并执行你的 Python 脚本
+      # 注意：请把下方 your_script.py 换成你实际的 python 文件名 (例如 update_data.py)
+      - name: Run Python Script
+        if: github.event_name == 'schedule'
+        env:
+          # 如果你需要传入 ZZSHARE_TOKEN，建议存入 GitHub Secrets 并在这里注入
+          ZZSHARE_TOKEN: ${{ secrets.ZZSHARE_TOKEN }} 
+        run: |
+          pip install requests pandas zzshare
+          python your_script.py
+
+      # 4. 检查 market_data.js 是否真的被更新了
+      - name: Check for changes
+        if: github.event_name == 'schedule'
+        id: check_changes
+        run: |
+          if git diff --quiet market_data.js; then
+            echo "changed=false" >> $GITHUB_OUTPUT
+            echo "没有数据更新（可能是非交易日或接口无数据）"
+          else
+            echo "changed=true" >> $GITHUB_OUTPUT
+            echo "检测到数据更新！"
+          fi
+
+      # 5. 提交并推送更改（仅在定时任务且有变化时执行）
+      - name: Commit and Push Changes
+        if: github.event_name == 'schedule' && steps.check_changes.outputs.changed == 'true'
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          git add market_data.js
+          git commit -m "Auto update market data [skip ci]"
+          git push
+
+      # 6. 发送企业微信通知
       - name: Send WeCom Notification
+        # 如果是手动 push，或者定时任务检测到文件变化，才执行推送
+        if: github.event_name == 'push' || (github.event_name == 'schedule' && steps.check_changes.outputs.changed == 'true')
         env:
           WECOM_WEBHOOK: ${{ secrets.WECOM_WEBHOOK }}
           SITE_URL: ${{ secrets.SITE_URL }}
-          SHA: ${{ github.sha }}
+          EVENT_NAME: ${{ github.event_name }}
         run: |
-          # 1. 构造极简 JSON
+          # 获取北京时间
+          CURRENT_TIME=$(TZ='Asia/Shanghai' date '+%Y-%m-%d %H:%M:%S')
+          # 生成时间戳，用于打破网页缓存
+          TIMESTAMP=$(date +%s)
+
+          # 根据触发来源判断文案
+          if [ "$EVENT_NAME" == "schedule" ]; then
+            MSG_TITLE="✅ **更新T-日数据成功**"
+          else
+            MSG_TITLE="✅ **代码推送成功，数据已更新**"
+          fi
+
+          # 使用 jq 安全构建 JSON
           JSON_PAYLOAD=$(jq -n \
-            --arg url "${SITE_URL}?v=${SHA}" \
+            --arg title "$MSG_TITLE" \
+            --arg time "$CURRENT_TIME" \
+            --arg url "${SITE_URL}?v=${TIMESTAMP}" \
             '{
               msgtype: "markdown",
               markdown: {
-                content: "✅ **代码推送成功，数据已更新**\n\n👉 [点击查看最新数据](\($url))"
+                content: "\($title)\n> **更新时间**：\($time)\n\n👉 [点击查看最新数据](\($url))"
               }
             }')
           
-          # 2. 打印要推送的内容，方便在日志里核对
-          echo "正在发送的内容: $JSON_PAYLOAD"
-          echo "当前使用的 Webhook 地址是: $WECOM_WEBHOOK"
-          
-          # 3. 发送请求
+          # 发送请求
           HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" -H "Content-Type: application/json" -d "$JSON_PAYLOAD" "$WECOM_WEBHOOK")
           
           echo "企业微信 API 返回状态码: $HTTP_CODE"
           
           if [ "$HTTP_CODE" -ne 200 ]; then
-            echo "推送失败，请检查 Webhook 地址是否配置正确。"
+            echo "推送失败！"
+            curl -s -H "Content-Type: application/json" -d "$JSON_PAYLOAD" "$WECOM_WEBHOOK"
             exit 1
           fi
           echo "推送成功！"
