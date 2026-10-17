@@ -1,285 +1,159 @@
 # -*- coding: utf-8 -*-
-"""
-A股全市场总市值（沪深 zzshare + 北交所官网）—— 单日模式
-=========================================================
-功能:
-  - 自动定位最近一个交易日（昨天，若是周末/节假日往前找）
-  - 北交所：一次拉全量后本地缓存，取目标日期
-  - 沪深：拉目标日期，带指数退避重试，本地缓存
-  - 结果追加到 a_share_total_mv.csv（同日期自动去重）
-  - 定时任务：每天 08:00 执行（默认不开启，见文件末尾）
-=========================================================
-"""
-
-import re
 import os
 import json
-import time
+import math
 import datetime
-import requests
-import pandas as pd
-from zzshare.client import DataApi
 
-# ==================== 配置 ====================
-OUTPUT_CSV   = "a_share_total_mv.csv"
-CACHE_ASHARE = "cache_ashare.json"
-CACHE_BSE    = "cache_bse.json"
-
-ZZSHARE_TOKEN = ""
-SLEEP_EACH    = 0.3
-
-BSE_OPEN_DATE = "2021-11-15"
-
-# 重试配置（沪深2 次，北交所 2 次）
-BSE_RETRY_TIMES    = 1
-ASHARE_RETRY_TIMES = 2
-
-BSE_URL = "https://www.bse.cn/marketStatController/dailyReport.do"
-BSE_HEADERS = {
-    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-    "Referer": "https://www.bse.cn/static/statisticdata.html",
-    "Origin": "https://www.bse.cn",
-    "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
-}
-
-api = DataApi(token=ZZSHARE_TOKEN) if ZZSHARE_TOKEN else DataApi()
+# 你下载的数据文件，请将 jQueryxxx.txt 重命名为这个
+INPUT_FILE = "avg_price_data.txt"
+JS_FILE = "market_data.js"
 
 
-# ==================== 缓存工具 ====================
-def load_cache(path):
-    if os.path.exists(path):
-        try:
-            with open(path, "r", encoding="utf-8") as f:
-                return json.load(f)
-        except Exception as e:
-            print(f"[缓存] 读取 {path} 失败: {e}")
-    return {}
-
-
-def save_cache(path, data):
-    tmp = path + ".tmp"
-    try:
-        with open(tmp, "w", encoding="utf-8") as f:
-            json.dump(data, f, ensure_ascii=False)
-        os.replace(tmp, path)
-    except Exception as e:
-        print(f"[缓存] 写入 {path} 失败: {e}")
-
-
-# ==================== 交易日历 ====================
-def get_trade_dates(start_date, end_date):
-    """用上证指数日线拿真实交易日列表"""
-    start_compact = start_date.replace("-", "")
-    end_compact   = end_date.replace("-", "")
-
-    for code in ["000001.SH", "sh000001", "000001"]:
-        try:
-            df = api.daily(ts_code=code,
-                           start_date=start_compact,
-                           end_date=end_compact)
-            if df is not None and not df.empty and "trade_date" in df.columns:
-                dates = sorted(df["trade_date"].astype(str).unique())
-                return [f"{d[:4]}-{d[4:6]}-{d[6:]}" for d in dates]
-        except Exception:
-            continue
-
-    print("[警告] 无法获取交易日历，退回简单工作日")
-    return [d.strftime("%Y-%m-%d")
-            for d in pd.bdate_range(start=start_date, end=end_date)]
-
-
-def get_last_trade_date():
-    """
-    定位"昨天"对应的最近一个交易日：
-      - 昨天是交易日 -> 返回昨天
-      - 昨天是周末/节假日 -> 往前找最近一个交易日
-    """
-    today = datetime.date.today()
-    start = (today - datetime.timedelta(days=10)).strftime("%Y-%m-%d")
-    end   = today.strftime("%Y-%m-%d")
-
-    dates = get_trade_dates(start, end)
-    if not dates:
+def safe_round(v, n=4):
+    """安全转换数字"""
+    if v is None:
         return None
-
-    yesterday = (today - datetime.timedelta(days=1)).strftime("%Y-%m-%d")
-    candidates = [d for d in dates if d <= yesterday]
-    return candidates[-1] if candidates else None
-
-
-# ==================== 北交所：全量拉取（用于缓存） ====================
-def fetch_bse_all():
-    """带指数退避重试的全量拉取；过滤 BSE_OPEN_DATE 之前的记录"""
-    print("[北交所] 拉取全量数据 ...")
-    bse_open_compact = BSE_OPEN_DATE.replace("-", "")
-
-    for i in range(BSE_RETRY_TIMES):
-        try:
-            r = requests.post(BSE_URL, data={"date": ""},
-                              headers=BSE_HEADERS, timeout=30)
-            m = re.search(r"null\((\[.*\])\)", r.text, re.DOTALL)
-            if not m:
-                raise ValueError("返回格式异常")
-
-            data = json.loads(m.group(1))
-            result = {}
-            for item in data:
-                if item.get("xxzrlx") != "2" or "zsz" not in item or not item.get("rq"):
-                    continue
-                rq = str(item["rq"])
-                if rq < bse_open_compact:
-                    continue
-                result[rq] = float(item["zsz"]) / 1e8
-
-            print(f"[北交所] 共获取 {len(result)} 个交易日")
-            return result
-
-        except Exception as e:
-            wait = 2 ** i
-            print(f"[北交所] 第 {i+1}/{BSE_RETRY_TIMES} 次失败: {e}，{wait}s 后重试")
-            if i < BSE_RETRY_TIMES - 1:
-                time.sleep(wait)
-
-    print("[北交所] 全部重试失败，返回空")
-    return {}
+    try:
+        f = float(v)
+    except (TypeError, ValueError):
+        return None
+    if math.isnan(f) or math.isinf(f):
+        return None
+    return round(f, n)
 
 
-# ==================== 沪深：单日拉取 + 指数退避 ====================
-def get_ashare_total_mv(date_str, retries=ASHARE_RETRY_TIMES):
-    """带指数退避重试的沪深全市场总市值获取"""
-    for i in range(retries):
-        try:
-            df = api.finance_valuation(date_str)
-            if df is None or df.empty:
-                return None, None, None, 0
-
-            code = df["code"].astype(str)
-            sse_mask  = code.str.endswith((".SH", ".KSH"))
-            szse_mask = code.str.endswith((".SZ", ".GEM"))
-
-            sse_mv  = float(df.loc[sse_mask,  "market_cap"].sum())
-            szse_mv = float(df.loc[szse_mask, "market_cap"].sum())
-            total   = float(df["market_cap"].sum())
-
-            return total, sse_mv, szse_mv, len(df)
-
-        except Exception as e:
-            wait = 2 ** i
-            print(f"  [zzshare {date_str}] 第 {i+1}/{retries} 次失败: {e}，{wait}s 后重试")
-            if i < retries - 1:
-                time.sleep(wait)
-
-    return None, None, None, 0
+def load_market_data():
+    if not os.path.exists(JS_FILE):
+        return {"ashare": {}, "bse": {}, "meta": {}, "annual": [], "gdp_annual": {}}
+    with open(JS_FILE, "r", encoding="utf-8") as f:
+        content = f.read()
+    start = content.find("{")
+    end = content.rfind("}")
+    if start < 0 or end < 0:
+        raise ValueError("无法在 JS 文件中定位 JSON 数据")
+    return json.loads(content[start:end + 1])
 
 
-# ==================== 单日任务 ====================
-def run_once():
-    """拉取最近一个交易日的数据，追加到 CSV"""
-    target_date = get_last_trade_date()
-    if target_date is None:
-        print("[跳过] 无法确定目标交易日")
+def save_market_data(data):
+    if isinstance(data.get("ashare"), dict):
+        data["ashare"] = dict(sorted(data["ashare"].items(), key=lambda kv: kv[0], reverse=True))
+    if isinstance(data.get("bse"), dict):
+        data["bse"] = dict(sorted(data["bse"].items(), key=lambda kv: kv[0], reverse=True))
+
+    payload = json.dumps(data, ensure_ascii=False, separators=(",", ":"), allow_nan=False)
+    out = "window.MARKET_DATA = " + payload + ";"
+
+    tmp = JS_FILE + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
+        f.write(out)
+        f.flush()
+        os.fsync(f.fileno())
+    os.replace(tmp, JS_FILE)
+    print(f"[成功] 已保存更新至 {JS_FILE}")
+
+
+def main():
+    if not os.path.exists(INPUT_FILE):
+        print(f"[错误] 找不到文件: {INPUT_FILE}，请重命名或修改脚本中的 INPUT_FILE")
         return
 
-    print(f"\n{'='*60}")
-    print(f"目标交易日: {target_date}")
-    print(f"{'='*60}")
+    # 1. 读取并剥离 JSONP
+    with open(INPUT_FILE, "r", encoding="utf-8") as f:
+        text = f.read()
 
-    # ---------- 北交所 ----------
-    bse_cache = load_cache(CACHE_BSE)
-    if not bse_cache:
-        bse_cache = fetch_bse_all()
-        save_cache(CACHE_BSE, bse_cache)
-    else:
-        print("[北交所] 使用本地缓存")
-    bse_mv = bse_cache.get(target_date.replace("-", ""))
+    s_idx = text.find('(')
+    e_idx = text.rfind(')')
+    if s_idx == -1 or e_idx == -1:
+        print("[错误] 文件格式不是标准的 JSONP 格式（缺少括号）")
+        return
 
-    # ---------- 沪深 ----------
-    ashare_cache = load_cache(CACHE_ASHARE)
-    if target_date in ashare_cache:
-        c = ashare_cache[target_date]
-        ashare_total = c.get("ashare_total")
-        sse_mv       = c.get("sse_mv")
-        szse_mv      = c.get("szse_mv")
-        cnt          = c.get("cnt", 0)
-        tag = "缓存"
-    else:
-        ashare_total, sse_mv, szse_mv, cnt = get_ashare_total_mv(target_date)
-        tag = "新拉"
-        if ashare_total is not None:
-            ashare_cache[target_date] = {
-                "ashare_total": ashare_total,
-                "sse_mv": sse_mv,
-                "szse_mv": szse_mv,
-                "cnt": cnt,
-            }
-            save_cache(CACHE_ASHARE, ashare_cache)
-
-    # ---------- 汇总 ----------
-    record = {
-        "date": target_date,
-        "sse_mv_yi":  round(sse_mv,  2) if sse_mv  is not None else None,
-        "szse_mv_yi": round(szse_mv, 2) if szse_mv is not None else None,
-        "bse_mv_yi":  round(bse_mv,  2) if bse_mv  is not None else None,
-        "stock_count": cnt,
-    }
-
-    if ashare_total is not None and bse_mv is not None:
-        record["total_mv_yi"] = round(ashare_total + bse_mv, 2)
-    elif ashare_total is not None:
-        record["total_mv_yi"] = round(ashare_total, 2)
-    else:
-        record["total_mv_yi"] = None
-
-    a_str = f"{ashare_total:.2f}" if ashare_total is not None else "None"
-    b_str = f"{bse_mv:.2f}" if bse_mv is not None else "None"
-    t_str = f"{record['total_mv_yi']:.2f}" if record["total_mv_yi"] is not None else "None"
-    print(f"[{target_date}] ({tag})  沪深 {a_str} | 北交所 {b_str} | 合计 {t_str}")
-
-    # ---------- 追加 CSV（同日期去重） ----------
-    df_new = pd.DataFrame([record])
-    if os.path.exists(OUTPUT_CSV):
-        df_old = pd.read_csv(OUTPUT_CSV)
-        df_old = df_old[df_old["date"] != target_date]      # 去掉旧记录，避免重复
-        df_out = pd.concat([df_old, df_new], ignore_index=True)
-    else:
-        df_out = df_new
-
-    df_out = df_out.sort_values("date").reset_index(drop=True)
-    df_out.to_csv(OUTPUT_CSV, index=False, encoding="utf-8-sig")
-    print(f"[输出] 已写入 {OUTPUT_CSV}（共 {len(df_out)} 行）")
-
-
-# ==================== 主流程 ====================
-def main():
+    json_str = text[s_idx + 1: e_idx]
     try:
-        run_once()
-    except KeyboardInterrupt:
-        print("\n!!! 用户中断")
+        raw_data = json.loads(json_str)
     except Exception as e:
-        print(f"\n!!! 执行异常: {e}")
+        print(f"[错误] 解析 JSON 失败: {e}")
+        return
+
+    klines = raw_data.get("data", {}).get("klines", [])
+    if not klines:
+        print("[错误] 未找到 K 线数据 (klines)")
+        return
+
+    # 2. 解析 K 线：日期,开盘,收盘,最高,最低,...
+    parsed_records = []
+    for line in klines:
+        parts = line.split(",")
+        if len(parts) < 5:
+            continue
+
+        date_str = parts[0]
+        o = safe_round(parts[1])
+        c = safe_round(parts[2])
+        h = safe_round(parts[3])
+        l = safe_round(parts[4])
+
+        parsed_records.append({
+            "date": date_str,
+            "open": o,
+            "close": c,
+            "high": h,
+            "low": l,
+            "price": c  # 将收盘价作为平均价 price
+        })
+
+    if not parsed_records:
+        print("[错误] 解析后没有有效的 OHLC 数据")
+        return
+
+    # 3. 过滤近一个月的数据
+    latest_date_str = max(r["date"] for r in parsed_records)
+    latest_date = datetime.datetime.strptime(latest_date_str, "%Y-%m-%d").date()
+    one_month_ago = latest_date - datetime.timedelta(days=30)
+
+    recent_records = [
+        r for r in parsed_records
+        if datetime.datetime.strptime(r["date"], "%Y-%m-%d").date() >= one_month_ago
+    ]
+    print(f"[信息] 提取近一个月数据: {one_month_ago} 至 {latest_date_str}，共 {len(recent_records)} 条")
+
+    # 4. 合并更新数据
+    data = load_market_data()
+    ashare = data.setdefault("ashare", {})
+
+    update_count = 0
+    new_count = 0
+
+    for r in recent_records:
+        d = r["date"]
+
+        if d not in ashare:
+            # 如果没有该日期的记录，新建一个基础记录
+            ashare[d] = {
+                "ashare_total": None,
+                "sse_mv": None,
+                "szse_mv": None,
+                "cnt": 0
+            }
+            new_count += 1
+        else:
+            update_count += 1
+
+        # 覆盖更新 OHLC 和 price
+        ashare[d]["open"] = r["open"]
+        ashare[d]["high"] = r["high"]
+        ashare[d]["low"] = r["low"]
+        ashare[d]["close"] = r["close"]
+        ashare[d]["price"] = r["price"]
+
+    # 5. 更新时间戳并保存
+    now_str = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    meta = data.setdefault("meta", {})
+    meta["avg_price_updated_at"] = now_str
+    meta["avg_price_fields"] = ["open", "high", "low", "close", "price"]
+
+    save_market_data(data)
+    print(f"[完成] 补充新日期 {new_count} 条，覆盖更新已有日期 {update_count} 条。")
 
 
 if __name__ == "__main__":
     main()
-
-
-# ==================== 定时任务（默认不开启，需要时取消注释） ====================
-# 依赖: pip install schedule
-#
-# import schedule
-#
-# def scheduled_job():
-#     print(f"\n[{datetime.datetime.now()}] 定时任务触发")
-#     try:
-#         run_once()
-#     except Exception as e:
-#         print(f"定时任务执行失败: {e}")
-#
-# schedule.every().day.at("08:00").do(scheduled_job)
-#
-# if __name__ == "__main__":
-#     print("定时任务已启动，每天 08:00 执行")
-#     schedule.run_pending()  # 立即检查一次
-#     while True:
-#         schedule.run_pending()
-#         time.sleep(30)

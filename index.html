@@ -23,9 +23,9 @@
 
   header {
     display: flex; align-items: center; justify-content: space-between;
-    margin-bottom: 12px; flex-wrap: wrap; gap: 8px;
+    margin-bottom: 16px; flex-wrap: wrap; gap: 8px;
   }
-  header h1 { font-size: 18px; font-weight: 600; }
+  header h1 { font-size: 26px; font-weight: 800; color: #111827; letter-spacing: 1px; }
 
   .kpi-row {
     display: grid; grid-template-columns: 1fr 1fr 1fr;
@@ -87,17 +87,18 @@
   .chart-sm { height: 420px; }
 
   .chart-note {
-    padding: 8px 14px 12px;
-    font-size: 11px;
-    color: #9ca3af;
+    padding: 12px 14px 16px;
+    font-size: 13px;
+    font-weight: 700;
+    color: #374151;
     line-height: 1.6;
     display: flex;
     align-items: flex-start;
-    gap: 6px;
+    gap: 8px;
   }
   .chart-note::before {
     content: '';
-    width: 4px; height: 4px;
+    width: 6px; height: 6px;
     margin-top: 7px;
     border-radius: 50%;
     background: #f59e0b;
@@ -117,19 +118,29 @@
 
   .table-card { padding: 4px 12px 12px; overflow: hidden; }
   .table-wrap {
+    width: 100%;
+    /* 去掉 max-width，让表格随屏幕自然铺满 */
     overflow-x: auto; -webkit-overflow-scrolling: touch;
     border-radius: 8px;
   }
   table {
     width: 100%; min-width: 520px;
-    border-collapse: collapse; font-size: 12px; white-space: nowrap;
+    border-collapse: collapse; font-size: 13px; white-space: nowrap;
+    table-layout: auto; /* 让表格列宽自然分布 */
   }
+  /* 所有表头和内容完全居中对齐，并调整水平内边距 */
   th, td {
-    padding: 12px 16px; text-align: right;
+    padding: 16px 12px;
+    text-align: center;
     border-bottom: 1px solid #f3f4f6;
   }
-  th:first-child, td:first-child { text-align: left; }
-  th:nth-child(5), td:nth-child(5) { text-align: center; }
+  th {
+    background: #f9fafb; color: #6b7280; font-weight: 500;
+    font-size: 12px; text-transform: uppercase;
+  }
+  /* 清除之前的首尾特殊对齐，让所有列保持高度一致的居中 */
+  th:first-child, td:first-child { text-align: center; padding-left: 12px; }
+  th:last-child, td:last-child { text-align: center; padding-right: 12px; }
   th {
     background: #f9fafb; color: #6b7280; font-weight: 500;
     font-size: 11px; text-transform: uppercase;
@@ -169,8 +180,16 @@
 
   @media (max-width: 720px) {
     body { padding: 8px; }
-    header { margin-bottom: 8px; }
-    header h1 { font-size: 16px; }
+      /* ★ 隐藏 H5 端标题 */
+    header { display: none; }
+    /* ★ 恢复 H5 端表格紧凑布局 */
+    .table-card { padding: 2px 6px 6px; display: block; }
+    .table-wrap { max-width: 100%; border-radius: 6px; }
+    table { font-size: 10px; min-width: 0; width: 100%; }
+    th, td { padding: 6px 3px; }
+    th { font-size: 9px; padding: 6px 3px; }
+    th:first-child, td:first-child { padding-left: 8px; }
+    th:last-child, td:last-child { padding-right: 8px; }
 
     .kpi-row { grid-template-columns: 1fr 1fr 1fr; gap: 6px; margin-bottom: 8px; }
     .card { padding: 8px 6px; border-radius: 8px; }
