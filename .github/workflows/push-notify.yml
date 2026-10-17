@@ -2,7 +2,7 @@ name: Push Notification to WeCom
 
 on:
   push:
-    branches: [ main ] # 你可以改为你的主分支名称，如 master
+    branches: [ main ]   # 改成你的主分支名，如 master
 
 jobs:
   notify:
@@ -11,10 +11,10 @@ jobs:
       - name: Send WeCom Notification
         run: |
           curl -H "Content-Type: application/json" \
-          -d '{
-            "msgtype": "markdown",
-            "markdown": {
-              "content": "✅ **代码推送成功**\n> **仓库**: ${{ github.repository }}\n> **分支**: ${{ github.ref_name }}\n> **提交者**: ${{ github.actor }}\n>  **时间**: ${{ github.event.head_commit.timestamp }}"
+          -d "{
+            \"msgtype\": \"markdown\",
+            \"markdown\": {
+              \"content\": \"✅ **代码推送成功，数据已更新**\n> **仓库**: ${{ github.repository }}\n>  **时间**: ${{ github.event.head_commit.timestamp }}\n\n👉 [点击查看最新数据](${{ secrets.SITE_URL }})\"
             }
-          }' \
+          }" \
           ${{ secrets.WECOM_WEBHOOK }}
