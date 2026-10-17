@@ -5,6 +5,7 @@ on:
     branches: [ main ]     # 当你手动 git push 时触发
   schedule:
     - cron: '0 0 * * *'    # 每天北京时间 08:00 自动触发 (UTC 00:00)
+  workflow_dispatch:       # 【新增】允许你在 GitHub 网页 Actions 面板上手动点击按钮运行（用于测试或补数据）
 
 jobs:
   update-and-notify:
@@ -16,27 +17,30 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      # 2. 准备 Python 环境 (只有定时任务时才需要执行 Python)
+      # 2. 准备 Python 环境（仅在定时任务或手动触发时运行，push 代码时不跑）
       - name: Set up Python
-        if: github.event_name == 'schedule'
+        if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
         uses: actions/setup-python@v5
         with:
           python-version: '3.10'
-          
+          cache: 'pip'     # 【新增】自动缓存 pip 依赖，下次运行极速安装
+
       # 3. 安装依赖并执行你的 Python 脚本
-      # 注意：请把下方 your_script.py 换成你实际的 python 文件名 (例如 update_data.py)
+      # 注意：请把下方 你的脚本文件名.py 换成你实际的 python 文件名 (例如 update_data.py)
       - name: Run Python Script
-        if: github.event_name == 'schedule'
+        if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
         env:
           # 如果你需要传入 ZZSHARE_TOKEN，建议存入 GitHub Secrets 并在这里注入
-          ZZSHARE_TOKEN: ${{ secrets.ZZSHARE_TOKEN }} 
+          ZZSHARE_TOKEN: ${{ secrets.ZZSHARE_TOKEN }}
         run: |
+          # 安装依赖（如果有 requirements.txt，建议改为 pip install -r requirements.txt）
           pip install requests pandas zzshare
           python stock.py
 
       # 4. 检查 market_data.js 是否真的被更新了
+      # 如果 Python 内部判断非交易日直接 return，文件不会变动，后续步骤会自动跳过
       - name: Check for changes
-        if: github.event_name == 'schedule'
+        if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
         id: check_changes
         run: |
           if git diff --quiet market_data.js; then
@@ -47,20 +51,21 @@ jobs:
             echo "检测到数据更新！"
           fi
 
-      # 5. 提交并推送更改（仅在定时任务且有变化时执行）
+      # 5. 提交并推送更改（仅在定时任务/手动触发，且检测到文件变化时执行）
       - name: Commit and Push Changes
-        if: github.event_name == 'schedule' && steps.check_changes.outputs.changed == 'true'
+        if: (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') && steps.check_changes.outputs.changed == 'true'
         run: |
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
           git add market_data.js
+          # [skip ci] 告诉 GitHub 机器人提交的代码不要再次触发 Actions，完美避免死循环
           git commit -m "Auto update market data [skip ci]"
           git push
 
-      # 6. 发送企业微信通知
+      # 6. 发送企业微信成功通知
+      # 如果是手动 push 代码，或者定时/手动触发且文件有变化，才执行推送
       - name: Send WeCom Notification
-        # 如果是手动 push，或者定时任务检测到文件变化，才执行推送
-        if: github.event_name == 'push' || (github.event_name == 'schedule' && steps.check_changes.outputs.changed == 'true')
+        if: github.event_name == 'push' || ((github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') && steps.check_changes.outputs.changed == 'true')
         env:
           WECOM_WEBHOOK: ${{ secrets.WECOM_WEBHOOK }}
           SITE_URL: ${{ secrets.SITE_URL }}
@@ -72,8 +77,8 @@ jobs:
           TIMESTAMP=$(date +%s)
 
           # 根据触发来源判断文案
-          if [ "$EVENT_NAME" == "schedule" ]; then
-            MSG_TITLE="✅ **更新T-日数据成功**"
+          if [ "$EVENT_NAME" == "schedule" ] || [ "$EVENT_NAME" == "workflow_dispatch" ]; then
+            MSG_TITLE="✅ **数据更新提示**"
           else
             MSG_TITLE="✅ **代码推送成功，数据已更新**"
           fi
@@ -101,3 +106,23 @@ jobs:
             exit 1
           fi
           echo "推送成功！"
+
+      # 7. 失败告警通知（如果前面的任何步骤报错，就会执行这里）
+      - name: Send Failure Notification
+        if: failure()
+        env:
+          WECOM_WEBHOOK: ${{ secrets.WECOM_WEBHOOK }}
+        run: |
+          CURRENT_TIME=$(TZ='Asia/Shanghai' date '+%Y-%m-%d %H:%M:%S')
+          # 构造失败消息（带上了 Actions 日志链接，点击直接跳转排错）
+          JSON_PAYLOAD=$(jq -n \
+            --arg time "$CURRENT_TIME" \
+            --arg url "https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}" \
+            '{
+              msgtype: "markdown",
+              markdown: {
+                content: "❌ **定时任务执行失败**\n> **时间**：\($time)\n> **原因**：抓取异常或接口返回空数据，已拦截写入。\n\n👉 [点击查看 GitHub Actions 日志排查](\($url))"
+              }
+            }')
+          
+          curl -s -H "Content-Type: application/json" -d "$JSON_PAYLOAD" "$WECOM_WEBHOOK"
