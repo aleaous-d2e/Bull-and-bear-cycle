@@ -2,7 +2,7 @@ name: Push Notification to WeCom
 
 on:
   push:
-    branches: [ main ] # 确认这是你的主分支名
+    branches: [ main ] # 确认这是你的分支
 
 jobs:
   notify:
@@ -12,29 +12,29 @@ jobs:
         env:
           WECOM_WEBHOOK: ${{ secrets.WECOM_WEBHOOK }}
           SITE_URL: ${{ secrets.SITE_URL }}
-          REPO: ${{ github.repository }}
-          TIMESTAMP: ${{ github.event.head_commit.timestamp }}
           SHA: ${{ github.sha }}
         run: |
-          # 使用 jq 安全地构造 JSON
+          # 1. 构造极简 JSON
           JSON_PAYLOAD=$(jq -n \
-            --arg repo "$REPO" \
-            --arg time "$TIMESTAMP" \
             --arg url "${SITE_URL}?v=${SHA}" \
             '{
               msgtype: "markdown",
               markdown: {
-                content: "✅ **代码推送成功，数据已更新**\n>  **时间**: \($time)\n\n👉 [点击查看最新数据](\($url))"
+                content: "✅ **代码推送成功，数据已更新**\n\n👉 [点击查看最新数据](\($url))"
               }
             }')
           
-          # 发送请求，-s 静默输出，-w 打印 HTTP 状态码
+          # 2. 打印要推送的内容，方便在日志里核对
+          echo "正在发送的内容: $JSON_PAYLOAD"
+          echo "当前使用的 Webhook 地址是: $WECOM_WEBHOOK"
+          
+          # 3. 发送请求
           HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" -H "Content-Type: application/json" -d "$JSON_PAYLOAD" "$WECOM_WEBHOOK")
           
           echo "企业微信 API 返回状态码: $HTTP_CODE"
           
           if [ "$HTTP_CODE" -ne 200 ]; then
-            echo "推送失败，请检查 Webhook 地址是否正确或存在网络问题。"
+            echo "推送失败，请检查 Webhook 地址是否配置正确。"
             exit 1
           fi
           echo "推送成功！"
