@@ -32,7 +32,7 @@ jobs:
           ZZSHARE_TOKEN: ${{ secrets.ZZSHARE_TOKEN }} 
         run: |
           pip install requests pandas zzshare
-          python your_script.py
+          python stock.py
 
       # 4. 检查 market_data.js 是否真的被更新了
       - name: Check for changes
