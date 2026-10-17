@@ -1,0 +1,10 @@
+# 编辑器配置
+.idea/
+.vscode/
+.env
+# Python 缓存
+__pycache__/
+*.py[cod]
+
+# 本地生成的缓存文件（如果你不想把北交所历史数据也传上去的话）
+cache_bse.json

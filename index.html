@@ -1,0 +1,1144 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>牛熊指标</title>
+<script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
+<script src="market_data.js"></script>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+   html, body {
+    overflow-x: hidden;              /* ★ 彻底防止整页横向滚动条 */
+    max-width: 100vw;
+  }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
+                 "Microsoft YaHei", sans-serif;
+    background: #f0f2f5; color: #1f2937; padding: 12px;
+    -webkit-text-size-adjust: 100%;
+  }
+  .wrap { max-width: 1440px; margin: 0 auto; overflow-x: hidden; }
+
+  header {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 12px; flex-wrap: wrap; gap: 8px;
+  }
+  header h1 { font-size: 18px; font-weight: 600; }
+
+  .kpi-row {
+    display: grid; grid-template-columns: 1fr 1fr 1fr;
+    gap: 10px; margin-bottom: 12px;
+  }
+  .card {
+    background: #fff; border-radius: 10px; padding: 14px;
+    box-shadow: 0 1px 3px rgba(0,0,0,.06);
+  }
+  .kpi-label {
+    font-size: 12px; color: #6b7280; margin-bottom: 6px;
+    display: flex; align-items: baseline; justify-content: space-between; gap: 6px;
+  }
+  .kpi-date { font-size: 11px; color: #9ca3af; font-weight: 400; }
+  .kpi-value { font-size: 22px; font-weight: 700; line-height: 1.2; }
+  .kpi-value small { font-size: 12px; font-weight: 500; color: #6b7280; margin-left: 4px; }
+  .kpi-delta { font-size: 11px; margin-top: 4px; }
+
+  .kpi-delta.up { color: #ef4444; }
+  .kpi-delta.down { color: #10b981; }
+  .kpi-delta.flat { color: #6b7280; }
+
+  .chart-card { padding: 8px 8px 0 8px; margin-bottom: 12px; }
+  .chart-toolbar {
+    display: flex; justify-content: flex-end; align-items: center;
+    padding: 4px 4px 0; gap: 8px; flex-wrap: wrap;
+  }
+  .chart-title {
+    margin-right: auto; padding-left: 6px;
+    font-size: 13px; font-weight: 600; color: #374151;
+    display: flex; align-items: center; gap: 6px;
+  }
+
+  .gran-switch {
+    display: inline-flex; background: #f3f4f6; border-radius: 8px; padding: 2px;
+  }
+  .gran-switch button {
+    border: none; background: transparent; color: #6b7280;
+    font-size: 12px; padding: 5px 14px; border-radius: 6px;
+    cursor: pointer; transition: all .15s; font-family: inherit;
+    font-weight: 500; line-height: 1;
+  }
+  .gran-switch button.active { background: #2563eb; color: #fff; }
+  .gran-switch button:not(.active):hover { color: #2563eb; }
+
+  /* 三条趋势线按钮（颜色与线条一致） */
+  .trend-btn {
+    border: 1px solid #e5e7eb; background: #fff; color: #9ca3af;
+    font-size: 12px; padding: 5px 12px; border-radius: 6px;
+    cursor: pointer; font-family: inherit; font-weight: 500;
+    line-height: 1; transition: all .15s;
+  }
+  .trend-btn:hover { color: #6b7280; border-color: #d1d5db; }
+  .trend-btn.active.high { background: #dc2626; color: #fff; border-color: #dc2626; }
+  .trend-btn.active.low  { background: #2563eb; color: #fff; border-color: #2563eb; }
+  .trend-btn.active.mix  { background: #8b5cf6; color: #fff; border-color: #8b5cf6; }
+
+  .chart { width: 100%; height: 440px; }
+  .chart-sm { height: 420px; }
+
+  .chart-note {
+    padding: 8px 14px 12px;
+    font-size: 11px;
+    color: #9ca3af;
+    line-height: 1.6;
+    display: flex;
+    align-items: flex-start;
+    gap: 6px;
+  }
+  .chart-note::before {
+    content: '';
+    width: 4px; height: 4px;
+    margin-top: 7px;
+    border-radius: 50%;
+    background: #f59e0b;
+    flex-shrink: 0;
+  }
+
+  .note-bar {
+    background: #fff; border-radius: 10px; padding: 12px 16px;
+    margin-bottom: 12px; font-size: 12px; color: #6b7280;
+    box-shadow: 0 1px 3px rgba(0,0,0,.06);
+    display: flex; align-items: flex-start; gap: 8px;
+  }
+  .note-bar::before {
+    content: ''; width: 4px; height: 4px; margin-top: 7px;
+    border-radius: 50%; background: #2563eb; flex-shrink: 0;
+  }
+
+  .table-card { padding: 4px 12px 12px; overflow: hidden; }
+  .table-wrap {
+    overflow-x: auto; -webkit-overflow-scrolling: touch;
+    border-radius: 8px;
+  }
+  table {
+    width: 100%; min-width: 520px;
+    border-collapse: collapse; font-size: 12px; white-space: nowrap;
+  }
+  th, td {
+    padding: 12px 16px; text-align: right;
+    border-bottom: 1px solid #f3f4f6;
+  }
+  th:first-child, td:first-child { text-align: left; }
+  th:nth-child(5), td:nth-child(5) { text-align: center; }
+  th {
+    background: #f9fafb; color: #6b7280; font-weight: 500;
+    font-size: 11px; text-transform: uppercase;
+  }
+  tbody tr:hover { background: #f9fafb; }
+  td.num { font-variant-numeric: tabular-nums; }
+
+  td.up { color: #ef4444; }
+  td.down { color: #10b981; }
+
+  .tag {
+    display: inline-block; padding: 3px 10px; border-radius: 999px;
+    font-size: 11px; font-weight: 600; color: #fff;
+    white-space: nowrap; letter-spacing: .3px;
+  }
+  .lv-deep-green { background: #166534; }
+  .lv-green      { background: #22c55e; }
+  .lv-light-blue { background: #3b82f6; }
+  .lv-yellow     { background: #eab308; }
+  .lv-orange     { background: #f97316; }
+  .lv-red        { background: #dc2626; }
+
+  .err {
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    height: 100%; gap: 10px; color: #6b7280; font-size: 13px; line-height: 1.8;
+    text-align: center; padding: 20px;
+  }
+  .err code {
+    background: #f3f4f6; padding: 2px 6px; border-radius: 6px;
+    font-family: ui-monospace, Menlo, Consolas, monospace; color: #2563eb;
+  }
+
+  footer {
+    text-align: center; color: #9ca3af; font-size: 11px;
+    margin-top: 20px; padding: 10px;
+  }
+
+  @media (max-width: 720px) {
+    body { padding: 8px; }
+    header { margin-bottom: 8px; }
+    header h1 { font-size: 16px; }
+
+    .kpi-row { grid-template-columns: 1fr 1fr 1fr; gap: 6px; margin-bottom: 8px; }
+    .card { padding: 8px 6px; border-radius: 8px; }
+    .kpi-label { font-size: 10px; margin-bottom: 2px; gap: 2px; }
+    .kpi-date { display: none; }
+    .kpi-value { font-size: 16px; }
+    .kpi-value small { font-size: 10px; margin-left: 1px; }
+    .kpi-delta { font-size: 10px; margin-top: 2px; }
+
+    .chart { height: 280px; }
+    .chart-sm { height: 320px; }
+    .chart-card { padding: 6px 6px 0; }
+    .chart-toolbar { padding: 2px 2px 0; gap: 4px; }
+    .chart-title { font-size: 12px; padding-left: 4px; width: 100%; }
+    .gran-switch button { font-size: 11px; padding: 4px 10px; }
+    .trend-btn { font-size: 10px; padding: 4px 8px; }
+
+    .chart-note { font-size: 10px; padding: 6px 10px 8px; }
+
+    .note-bar { padding: 10px 12px; font-size: 11px; margin-bottom: 8px; }
+    .bse-note { display: none; }
+
+     .table-card { padding: 2px 6px 6px; }
+    .table-wrap { border-radius: 6px; }
+    table { font-size: 10px; min-width: 0; width: 100%; }
+    th, td { padding: 6px 3px; }
+    th { font-size: 9px; letter-spacing: 0; padding: 6px 3px; }
+    /* ★ 关键：给首列“日期”和尾列“操作建议”加上左右安全边距，防止贴边 */
+    th:first-child, td:first-child { padding-left: 8px; }
+    th:last-child, td:last-child { padding-right: 8px; }
+
+    footer { font-size: 10px; margin-top: 12px; padding: 6px; }
+  }
+
+  @media (max-width: 375px) {
+    .card { padding: 6px 4px; }
+    .kpi-value { font-size: 14px; }
+    .kpi-value small { font-size: 9px; }
+    .kpi-delta { font-size: 9px; }
+    .chart { height: 250px; }
+    .chart-sm { height: 280px; }
+    .tag { font-size: 9px; padding: 1px 4px; }
+    th, td { padding: 4px 2px; }
+    table { font-size: 9px; }
+    /* ★ 极窄屏幕下的安全边距 */
+    th:first-child, td:first-child { padding-left: 6px; }
+    th:last-child, td:last-child { padding-right: 6px; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <h1>牛熊指标</h1>
+  </header>
+
+  <div class="kpi-row">
+    <div class="card">
+      <div class="kpi-label">
+        <span>总市值</span>
+        <span class="kpi-date" id="kpi-mv-date">—</span>
+      </div>
+      <div class="kpi-value" id="kpi-mv">—</div>
+      <div class="kpi-delta" id="kpi-mv-d">—</div>
+    </div>
+    <div class="card">
+      <div class="kpi-label" id="kpi-gdp-label">GDP</div>
+      <div class="kpi-value" id="kpi-gdp">—</div>
+      <div class="kpi-delta flat" id="kpi-gdp-yoy">—</div>
+    </div>
+    <div class="card">
+      <div class="kpi-label">
+        <span id="kpi-ratio-label">市值 / GDP</span>
+      </div>
+      <div class="kpi-value" id="kpi-ratio">—</div>
+      <div class="kpi-delta" id="kpi-ratio-d">—</div>
+    </div>
+  </div>
+
+  <div class="card chart-card">
+    <div class="chart-toolbar">
+      <div class="gran-switch" id="granSwitch">
+        <button data-gran="day" class="active">日</button>
+        <button data-gran="week">周</button>
+        <button data-gran="month">月</button>
+      </div>
+    </div>
+    <div id="chart-main" class="chart"></div>
+  </div>
+
+<div class="note-bar">
+  <div style="line-height:1.9;">
+    总市值 = 上交所 + 深交所 + 北交所<span class="bse-note">（北交所市值自2021-11-15开市并纳入统计）</span><br>
+    <span id="gdp-note">—</span><br>
+    T日平均股价计算：所有T日有交易股票收盘价汇总 / 所有T日交易股票数量
+  </div>
+</div>
+  </div>
+
+  <!-- 平均股价 K 线（月线，含三条可切换趋势线） -->
+  <div class="card chart-card">
+    <div class="chart-toolbar">
+      <div class="chart-title">平均股价 · 月线</div>
+      <button id="trendBtnHigh" class="trend-btn high active">高位风险</button>
+      <button id="trendBtnLow"  class="trend-btn low  active">国运支撑</button>
+      <button id="trendBtnMix"  class="trend-btn mix  active">低估定投</button>
+    </div>
+    <div id="chart-price" class="chart chart-sm"></div>
+    <div class="chart-note">定投区间可能持续 3 个月 - 24 个月，控制定投策略</div>
+  </div>
+
+  <div class="card table-card">
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>日期</th>
+            <th>总市值(万亿)</th>
+            <th>总市值 / GDP</th>
+            <th>涨跌幅</th>
+            <th>估值判断</th>
+            <th>操作建议</th>
+          </tr>
+        </thead>
+        <tbody id="tbody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <footer>数据来源：不辞 · GDP：国家统计局</footer>
+</div>
+
+<script>
+/* ============================================================
+   1. GDP 年度数据（亿元）
+   ============================================================ */
+const GDP_ANNUAL = {
+  2005: 189907.5, 2006: 222578.4, 2007: 274179.7, 2008: 324317.8,
+  2009: 354521.6, 2010: 419253.3, 2011: 495707.6, 2012: 547510.6,
+  2013: 603660.4, 2014: 655782.9, 2015: 702511.5, 2016: 761193.0,
+  2017: 847382.9, 2018: 936010.1, 2019: 1005872.4, 2020: 1034867.6,
+  2021: 1173823.0, 2022: 1234029.4, 2023: 1294271.7, 2024: 1348066.2,
+  2025: 1401879.2
+};
+
+function resolveLatestGDPYear() {
+  const currentYear = new Date().getFullYear();
+  const lastYear = currentYear - 1;
+  if (GDP_ANNUAL[lastYear] != null) return lastYear;
+  const years = Object.keys(GDP_ANNUAL).map(Number);
+  return Math.max.apply(null, years);
+}
+const GDP_LATEST_YEAR = resolveLatestGDPYear();
+const GDP_FALLBACK = GDP_ANNUAL[GDP_LATEST_YEAR];
+
+/* ============================================================
+   1.1 GDP 年度增速 & 当年 GDP 推算（每季度调整一次）
+   ============================================================ */
+function buildGDPGrowth() {
+  const years = Object.keys(GDP_ANNUAL).map(Number).sort((a, b) => a - b);
+  const growth = {};
+  for (let i = 1; i < years.length; i++) {
+    growth[years[i]] = GDP_ANNUAL[years[i]] / GDP_ANNUAL[years[i - 1]] - 1;
+  }
+  return { years, growth };
+}
+
+function estimateCurrentYearGDP() {
+  const { years, growth } = buildGDPGrowth();
+  const lastYear = years[years.length - 1];
+  const currentYear = new Date().getFullYear();
+
+  // 当年 GDP 已有实际值
+  if (GDP_ANNUAL[currentYear] != null) {
+    return {
+      year: currentYear,
+      value: GDP_ANNUAL[currentYear],
+      growth: growth[currentYear] != null ? growth[currentYear] : null,
+      isEstimate: false,
+      lastYear: lastYear
+    };
+  }
+
+  // 用最近 3 年增速均值作为基础增速
+  const recentYears = years.slice(-3);
+  const recentGrowths = recentYears.map(function (y) { return growth[y]; })
+                                   .filter(function (v) { return v != null; });
+  const baseGrowth = recentGrowths.length
+    ? recentGrowths.reduce(function (a, b) { return a + b; }, 0) / recentGrowths.length
+    : 0.05;
+
+  // 按季度进度保守调整（季度越靠后，预判越审慎）
+  const month = new Date().getMonth() + 1;
+  const quarter = Math.ceil(month / 3);
+  const quarterFactor = [1.00, 0.98, 0.96, 0.94][quarter - 1];
+  const estGrowth = baseGrowth * quarterFactor;
+
+  // 从 lastYear 逐年推算到 currentYear
+  let value = GDP_ANNUAL[lastYear];
+  for (let y = lastYear + 1; y <= currentYear; y++) {
+    value = value * (1 + estGrowth);
+  }
+
+  return {
+    year: currentYear,
+    value: value,
+    growth: estGrowth,
+    baseGrowth: baseGrowth,
+    quarter: quarter,
+    isEstimate: true,
+    lastYear: lastYear
+  };
+}
+
+const GDP_CURRENT = estimateCurrentYearGDP();
+
+// 有效 GDP 表（当年用推算值）
+const GDP_EFFECTIVE = Object.assign({}, GDP_ANNUAL);
+if (GDP_ANNUAL[GDP_CURRENT.year] == null) {
+  GDP_EFFECTIVE[GDP_CURRENT.year] = GDP_CURRENT.value;
+}
+
+/* ============================================================
+   2. 估值分级
+   ============================================================ */
+const LEVELS = [
+  { min: 1.000,      level: '疯狂',   action: '清仓', cls: 'lv-red' },
+  { min: 0.890,      level: '危险',   action: '半仓', cls: 'lv-orange' },
+  { min: 0.799,      level: '偏高',   action: '减仓', cls: 'lv-yellow' },
+  { min: 0.590,      level: '合理',   action: '持有', cls: 'lv-light-blue' },
+  { min: 0.500,      level: '低估',   action: '买入', cls: 'lv-green' },
+  { min: -Infinity,  level: '超低估', action: '定投', cls: 'lv-deep-green' }
+];
+function valuation(r) {
+  for (const l of LEVELS) if (r >= l.min) return l;
+  return LEVELS[LEVELS.length - 1];
+}
+
+/* ============================================================
+   3. 数据构建 & 聚合
+   ============================================================ */
+function ymd(key) {
+  return key.slice(0, 4) + '-' + key.slice(4, 6) + '-' + key.slice(6, 8);
+}
+
+function num(v, fallback) {
+  const n = Number(v);
+  return Number.isFinite(n) ? n : fallback;
+}
+
+function buildSeries(ashare, bse) {
+  const bseMap = {};
+  for (const k in bse) bseMap[ymd(k)] = bse[k];
+
+  const out = [];
+  for (const date in ashare) {
+    const r = ashare[date];
+    if (!r || typeof r.ashare_total !== 'number') continue;
+    const bseMv = bseMap[date] || 0;
+    const mv = r.ashare_total + bseMv;
+    const y = +date.slice(0, 4);
+    // 使用有效 GDP（含当年推算值）
+    const gdp = GDP_EFFECTIVE[y] || GDP_FALLBACK;
+    const price = r.price != null ? Number(r.price) : null;
+
+    const o = num(r.open,  price);
+    const h = num(r.high,  price);
+    const l = num(r.low,   price);
+    const c = num(r.close, price);
+
+    out.push({
+      date, mv, gdp,
+      bse: bseMv,
+      sse: r.sse_mv,
+      szse: r.szse_mv,
+      cnt: r.cnt,
+      price: price,
+      open: o, high: h, low: l, close: c,
+      ratio: mv / gdp
+    });
+  }
+  out.sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
+  return out;
+}
+
+function aggregateSeries(daily, gran) {
+  if (gran === 'day') return daily;
+  const groups = new Map();
+  for (const r of daily) {
+    let key;
+    if (gran === 'month') {
+      key = r.date.slice(0, 7);
+    } else if (gran === 'week') {
+      const d = new Date(r.date + 'T00:00:00');
+      const day = d.getDay();
+      const diff = day === 0 ? -6 : 1 - day;
+      d.setDate(d.getDate() + diff);
+      key = d.toISOString().slice(0, 10);
+    }
+    groups.set(key, r);
+  }
+  const arr = Array.from(groups.values());
+  arr.sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
+  return arr;
+}
+
+/* ============================================================
+   4. 状态
+   ============================================================ */
+let chart = null;
+let seriesIndex = new Map();
+let dailySeries = [];
+let weeklySeries = null;
+let monthlySeries = null;
+let currentGran = 'day';
+
+let priceChart = null;
+const currentPriceGran = 'month';   // 仅月线
+
+let showTrendHigh = true;
+let showTrendLow  = true;
+let showTrendMix  = true;
+
+const priceAggCache = { month: null };
+
+const TREND_NAME = {
+  high: '高位风险',
+  low:  '国运支撑',
+  mix:  '低估定投'
+};
+
+function getDisplaySeries() {
+  if (currentGran === 'day') return dailySeries;
+  if (currentGran === 'week') {
+    if (!weeklySeries) weeklySeries = aggregateSeries(dailySeries, 'week');
+    return weeklySeries;
+  }
+  if (currentGran === 'month') {
+    if (!monthlySeries) monthlySeries = aggregateSeries(dailySeries, 'month');
+    return monthlySeries;
+  }
+  return dailySeries;
+}
+
+/* ============================================================
+   5. KPI
+   ============================================================ */
+function renderKPI() {
+  const last = dailySeries[dailySeries.length - 1];
+  const prev = dailySeries[dailySeries.length - 2] || last;
+
+  document.getElementById('kpi-mv-date').textContent = 'T-1日：' + last.date;
+  document.getElementById('kpi-mv').innerHTML =
+    (last.mv / 10000).toFixed(2) + '<small>万亿</small>';
+
+  const chg = (last.mv / prev.mv - 1) * 100;
+  const el = document.getElementById('kpi-mv-d');
+  el.textContent = '较T-2日 ' + (chg >= 0 ? '+' : '') + chg.toFixed(2) + '%';
+  el.className = 'kpi-delta ' + (chg > 0 ? 'up' : chg < 0 ? 'down' : 'flat');
+
+  const yearNow = GDP_LATEST_YEAR;
+  const yearBase = yearNow - 1;
+
+  document.getElementById('kpi-gdp-label').textContent = 'GDP（' + yearNow + '）';
+
+  const gdpVal = GDP_ANNUAL[yearNow];
+  document.getElementById('kpi-gdp').innerHTML =
+    (gdpVal / 10000).toFixed(2) + '<small>万亿</small>';
+
+  const yoyEl = document.getElementById('kpi-gdp-yoy');
+  const gdpBase = GDP_ANNUAL[yearBase];
+  if (gdpBase) {
+    const yoy = (gdpVal / gdpBase - 1) * 100;
+    yoyEl.textContent = '同比 ' + yearBase + '年 '
+      + (yoy >= 0 ? '+' : '') + yoy.toFixed(2) + '%';
+    yoyEl.className = 'kpi-delta ' + (yoy > 0 ? 'up' : yoy < 0 ? 'down' : 'flat');
+  } else {
+    yoyEl.textContent = '—';
+    yoyEl.className = 'kpi-delta flat';
+  }
+
+   /* ---------- 第三张卡片：市值 / GDP ---------- */
+  // 动态写标题：市值 / GDP（2026E）或（2026年）
+  const yearLabel = GDP_CURRENT.isEstimate
+    ? GDP_CURRENT.year + 'E'
+    : GDP_CURRENT.year + '年';
+  document.getElementById('kpi-ratio-label').textContent =
+    '市值 / GDP（' + yearLabel + '）';
+
+  document.getElementById('kpi-ratio').textContent = last.ratio.toFixed(3);
+  const v = valuation(last.ratio);
+
+  // 卡片内只显示估值结论
+  const rd = document.getElementById('kpi-ratio-d');
+  rd.textContent = v.level + ' · ' + v.action;
+
+  const isRisk = (v.level === '疯狂' || v.level === '危险' || v.level === '偏高');
+  rd.className = 'kpi-delta ' + (isRisk ? 'up' : 'down');
+
+  /* ---------- GDP 信息写进 note-bar ---------- */
+  const gdpNoteEl = document.getElementById('gdp-note');
+  if (gdpNoteEl) {
+    const gdpGrowthPct = (GDP_CURRENT.growth != null)
+      ? (GDP_CURRENT.growth * 100).toFixed(2)
+      : '—';
+    const gdpGrowthSign = (GDP_CURRENT.growth != null && GDP_CURRENT.growth >= 0)
+      ? '+'
+      : '';
+    gdpNoteEl.textContent =
+      'GDP ' + (GDP_CURRENT.value / 10000).toFixed(2) + '万亿 ' +
+      gdpGrowthSign + gdpGrowthPct + '%' +
+      (GDP_CURRENT.isEstimate ? '（Q' + GDP_CURRENT.quarter + '推算）' : '');
+  }
+}
+
+/* ============================================================
+   6. 主图（市值/GDP + 平均股价）
+   ============================================================ */
+function renderChart() {
+  const series = getDisplaySeries();
+  seriesIndex = new Map(series.map(s => [s.date, s]));
+
+  const isMobile = window.innerWidth <= 720;
+
+  const totalCount = series.length;
+  const endDate = series[totalCount - 1].date;
+  const endYear = parseInt(endDate.slice(0, 4));
+  const targetYear = endYear - 3;
+  const targetDateStr = targetYear + endDate.slice(4);
+
+  let startIndex = 0;
+  for (let i = 0; i < series.length; i++) {
+    if (series[i].date >= targetDateStr) { startIndex = i; break; }
+  }
+  const startPercent = Math.max(0, (startIndex / totalCount) * 100);
+
+  if (!chart) chart = echarts.init(document.getElementById('chart-main'));
+
+  chart.setOption({
+    grid: isMobile
+      ? { left: 34, right: 34, top: 40, bottom: 50 }
+      : { left: 100, right: 100, top: 50, bottom: 66 },
+
+    legend: {
+      top: 0, left: 'center',
+      itemGap: isMobile ? 12 : 30,
+      itemWidth: isMobile ? 14 : 24,
+      itemHeight: isMobile ? 8 : 12,
+      data: ['市值/GDP', '平均股价(元)'],
+      textStyle: { color: '#6b7280', fontSize: isMobile ? 11 : 12 }
+    },
+
+    tooltip: {
+      trigger: 'axis',
+      axisPointer: { type: 'cross' },
+      confine: true,
+      formatter: params => {
+        const d = params[0].axisValue;
+        const r = seriesIndex.get(d);
+        if (!r) return '';
+        const v = valuation(r.ratio);
+        let html = '<div style="font-weight:600;margin-bottom:4px;font-size:13px;">' + d + '</div>';
+        html += '<div style="font-size:12px;color:#2563eb;">市值/GDP：' + r.ratio.toFixed(3) + '</div>';
+        if (r.price != null) {
+          html += '<div style="font-size:12px;color:#f59e0b;">平均股价：' + r.price.toFixed(2) + ' 元</div>';
+        } else {
+          html += '<div style="font-size:12px;color:#9ca3af;">平均股价：暂无数据</div>';
+        }
+        html += '<div style="font-size:12px;margin-top:4px;"><b>' + v.level + ' · ' + v.action + '</b></div>';
+        return html;
+      }
+    },
+
+    xAxis: {
+      type: 'category',
+      data: series.map(s => s.date),
+      axisLine: { lineStyle: { color: '#e5e7eb' } },
+      axisLabel: { color: '#6b7280', fontSize: isMobile ? 10 : 11, interval: 'auto' }
+    },
+
+    yAxis: [
+      {
+        type: 'value',
+        name: isMobile ? '' : '市值/GDP',
+        nameTextStyle: { color: '#2563eb', fontSize: 12 },
+        position: 'left',
+        axisLine: { show: false }, axisTick: { show: false },
+        splitLine: { lineStyle: { color: '#f3f4f6' } },
+        axisLabel: { color: '#2563eb', fontSize: isMobile ? 10 : 11 }
+      },
+      {
+        type: 'value',
+        name: isMobile ? '' : '价格(元)',
+        nameTextStyle: { color: '#f59e0b', fontSize: 12 },
+        position: 'right',
+        axisLine: { show: false }, axisTick: { show: false },
+        splitLine: { show: false },
+        min: 0, max: 100,
+        axisLabel: { color: '#f59e0b', fontSize: isMobile ? 10 : 11 }
+      }
+    ],
+
+    dataZoom: [
+      { type: 'inside', start: startPercent, end: 100 },
+      {
+        type: 'slider',
+        height: isMobile ? 14 : 18,
+        bottom: isMobile ? 4 : 12,
+        start: startPercent, end: 100,
+        borderColor: '#e5e7eb',
+        fillerColor: 'rgba(37,99,235,.08)',
+        handleStyle: { color: '#2563eb' },
+        textStyle: { fontSize: isMobile ? 9 : 11 }
+      }
+    ],
+
+    series: [
+      {
+        name: '市值/GDP',
+        type: 'line', yAxisIndex: 0,
+        data: series.map(s => +s.ratio.toFixed(4)),
+        smooth: true, symbol: 'none', sampling: 'lttb',
+        lineStyle: { width: isMobile ? 1.5 : 2, color: '#2563eb' },
+        areaStyle: {
+          color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+            { offset: 0, color: 'rgba(37,99,235,.25)' },
+            { offset: 1, color: 'rgba(37,99,235,.01)' }
+          ])
+        },
+        markLine: {
+          silent: true, symbol: 'none',
+          label: { position: 'insideEndTop', fontSize: isMobile ? 9 : 11 },
+          data: [
+            { yAxis: 0.890,
+              lineStyle: { color: '#f97316', type: 'dashed', width: 1 },
+              label: { formatter: '0.890 危险', color: '#f97316' } },
+            { yAxis: 0.799,
+              lineStyle: { color: '#eab308', type: 'dashed', width: 1 },
+              label: { formatter: '0.799 偏高', color: '#eab308' } },
+            { yAxis: 0.590,
+              lineStyle: { color: '#3b82f6', type: 'dashed', width: 1 },
+              label: { formatter: '0.590 低估', color: '#3b82f6' } }
+          ]
+        }
+      },
+      {
+        name: '平均股价(元)',
+        type: 'line', yAxisIndex: 1,
+        data: series.map(s => s.price),
+        smooth: true, symbol: 'none', sampling: 'lttb',
+        lineStyle: { width: isMobile ? 1.2 : 1.6, color: '#f59e0b', type: 'dashed' }
+      }
+    ]
+  }, true);
+}
+
+/* ============================================================
+   6.1 平均股价 K 线（仅月线）
+   ============================================================ */
+function weekKeyOf(dateStr) {
+  const d = new Date(dateStr + 'T00:00:00');
+  const day = d.getDay();
+  const diff = day === 0 ? -6 : 1 - day;
+  d.setDate(d.getDate() + diff);
+  const y  = d.getFullYear();
+  const m  = String(d.getMonth() + 1).padStart(2, '0');
+  const dd = String(d.getDate()).padStart(2, '0');
+  return y + '-' + m + '-' + dd;
+}
+
+function aggregateOHLC(daily, gran) {
+  const groups = new Map();
+
+  for (const r of daily) {
+    const key = gran === 'month' ? r.date.slice(0, 7) : weekKeyOf(r.date);
+    const o = r.open, h = r.high, l = r.low, c = r.close;
+    if (o == null || h == null || l == null || c == null) continue;
+
+    const g = groups.get(key);
+    if (!g) {
+      groups.set(key, {
+        key,
+        open: o, high: h, low: l, close: c,
+        firstDate: r.date, lastDate: r.date
+      });
+    } else {
+      if (h > g.high) g.high = h;
+      if (l < g.low)  g.low  = l;
+      g.close = c;
+      g.lastDate = r.date;
+    }
+  }
+
+  const arr = Array.from(groups.values());
+  arr.sort((a, b) => (a.key < b.key ? -1 : a.key > b.key ? 1 : 0));
+  return arr;
+}
+
+/* ---------- 趋势线关键锚点（可自由修改） ---------- */
+const TREND_HIGH_KEYS = ['2008-02', '2015-12', '2021-12'];
+const TREND_LOW_KEYS  = ['2008-11', '2019-01', '2024-02'];
+const TREND_MIX_KEYS  = [
+  { key: '2005-09', pick: 'high' },
+  { key: '2012-12', pick: 'low'  }
+];
+
+function linearFit(points) {
+  const n = points.length;
+  if (n < 2) return null;
+  let sx = 0, sy = 0, sxy = 0, sxx = 0;
+  for (const p of points) {
+    sx += p.x; sy += p.y;
+    sxy += p.x * p.y; sxx += p.x * p.x;
+  }
+  const denom = n * sxx - sx * sx;
+  if (Math.abs(denom) < 1e-9) return null;
+  const slope = (n * sxy - sx * sy) / denom;
+  const intercept = (sy - slope * sx) / n;
+  return { slope, intercept };
+}
+
+function buildExtendedTrend(agg, anchors) {
+  const keyToIdx = new Map();
+  agg.forEach((g, i) => keyToIdx.set(g.key, i));
+
+  const pts = [];
+  for (const a of anchors) {
+    const idx = keyToIdx.get(a.key);
+    if (idx != null) pts.push({ x: idx, y: agg[idx][a.pick] });
+  }
+  if (pts.length < 2) return null;
+
+  const fit = linearFit(pts);
+  if (!fit) return null;
+
+  const startIdx = pts[0].x;
+  const out = new Array(agg.length).fill(null);
+  for (let i = startIdx; i < agg.length; i++) {
+    out[i] = +(fit.slope * i + fit.intercept).toFixed(3);
+  }
+  return out;
+}
+
+function buildHighTrend(agg) {
+  return buildExtendedTrend(agg, TREND_HIGH_KEYS.map(k => ({ key: k, pick: 'high' })));
+}
+function buildLowTrend(agg) {
+  return buildExtendedTrend(agg, TREND_LOW_KEYS.map(k => ({ key: k, pick: 'low' })));
+}
+function buildMixTrend(agg) {
+  return buildExtendedTrend(agg, TREND_MIX_KEYS);
+}
+
+function renderPriceChart() {
+  if (!dailySeries.length) return;
+
+  const gran = 'month';
+  if (!priceAggCache[gran]) priceAggCache[gran] = aggregateOHLC(dailySeries, gran);
+  const agg = priceAggCache[gran];
+  if (!agg.length) return;
+
+  const isMobile = window.innerWidth <= 720;
+
+  const ohlc = agg.map(g => [g.open, g.close, g.low, g.high]);
+
+  let trendHigh = null, trendLow = null, trendMix = null;
+  if (showTrendHigh) trendHigh = buildHighTrend(agg);
+  if (showTrendLow)  trendLow  = buildLowTrend(agg);
+  if (showTrendMix)  trendMix  = buildMixTrend(agg);
+
+  const total   = agg.length;
+  const visible = total;
+  const startIndex = Math.max(0, total - visible);
+
+  if (!priceChart) priceChart = echarts.init(document.getElementById('chart-price'));
+
+  const seriesArr = [
+    {
+      name: '平均股价',
+      type: 'candlestick',
+      data: ohlc,
+      barMaxWidth: 14,
+      itemStyle: {
+        color: '#ef4444',
+        color0: '#10b981',
+        borderColor: '#ef4444',
+        borderColor0: '#10b981'
+      }
+    }
+  ];
+
+  if (trendHigh) seriesArr.push({
+    name: TREND_NAME.high,
+    type: 'line',
+    data: trendHigh,
+    connectNulls: true,
+    symbol: 'none',
+    showSymbol: false,
+    smooth: false,
+    lineStyle: { color: '#dc2626', width: 1.8 },
+    z: 5
+  });
+  if (trendLow) seriesArr.push({
+    name: TREND_NAME.low,
+    type: 'line',
+    data: trendLow,
+    connectNulls: true,
+    symbol: 'none',
+    showSymbol: false,
+    smooth: false,
+    lineStyle: { color: '#2563eb', width: 1.8 },
+    z: 5
+  });
+  if (trendMix) seriesArr.push({
+    name: TREND_NAME.mix,
+    type: 'line',
+    data: trendMix,
+    connectNulls: true,
+    symbol: 'none',
+    showSymbol: false,
+    smooth: false,
+    lineStyle: { color: '#8b5cf6', width: 1.8, type: 'dashed' },
+    z: 5
+  });
+
+  priceChart.setOption({
+    legend: { show: false },
+
+    grid: isMobile
+      ? { left: 8, right: 12, top: 20, bottom: 46, containLabel: true }
+      : { left: 22, right: 30, top: 26, bottom: 62, containLabel: true },
+
+    tooltip: {
+      trigger: 'axis',
+      axisPointer: { type: 'cross' },
+      confine: true,
+      formatter: params => {
+        if (!params || !params.length) return '';
+        const idx = params[0].dataIndex;
+        const g = agg[idx];
+        if (!g) return '';
+        const prev = idx > 0 ? agg[idx - 1] : null;
+        const chg  = prev ? (g.close / prev.close - 1) * 100 : null;
+        const upCls = g.close >= g.open;
+
+        let html = '<div style="font-weight:600;margin-bottom:4px;font-size:13px;">'
+                 + g.key + '</div>';
+        html += '<div style="font-size:12px;line-height:1.75;">';
+        html += '<div>开盘：<b>' + g.open.toFixed(2) + '</b></div>';
+        html += '<div>最高：<b>' + g.high.toFixed(2) + '</b></div>';
+        html += '<div>最低：<b>' + g.low.toFixed(2) + '</b></div>';
+        html += '<div>收盘：<b style="color:' + (upCls ? '#ef4444' : '#10b981')
+              + '">' + g.close.toFixed(2) + '</b></div>';
+        if (chg != null) {
+          html += '<div>涨跌幅：<b style="color:' + (chg >= 0 ? '#ef4444' : '#10b981')
+                + '">' + (chg >= 0 ? '+' : '') + chg.toFixed(2) + '%</b></div>';
+        }
+        html += '</div>';
+        return html;
+      }
+    },
+
+    xAxis: {
+      type: 'category',
+      data: agg.map(g => g.key),
+      boundaryGap: true,
+      axisLine: { lineStyle: { color: '#e5e7eb' } },
+      axisTick: { show: false },
+      axisLabel: {
+        color: '#6b7280',
+        fontSize: isMobile ? 10 : 11,
+        interval: 'auto'
+      }
+    },
+
+    yAxis: {
+      scale: true,
+      axisLine: { show: false },
+      axisTick: { show: false },
+      splitLine: { lineStyle: { color: '#f3f4f6' } },
+      axisLabel: { color: '#6b7280', fontSize: isMobile ? 10 : 11 }
+    },
+
+    dataZoom: [
+      { type: 'inside', startValue: startIndex, endValue: total - 1 },
+      {
+        type: 'slider',
+        height: isMobile ? 14 : 18,
+        bottom: isMobile ? 4 : 10,
+        startValue: startIndex,
+        endValue: total - 1,
+        borderColor: '#e5e7eb',
+        fillerColor: 'rgba(37,99,235,.08)',
+        handleStyle: { color: '#2563eb' },
+        textStyle: { fontSize: isMobile ? 9 : 11 }
+      }
+    ],
+
+    series: seriesArr
+  }, true);
+}
+
+/* ============================================================
+   7. 表格
+   ============================================================ */
+function renderTable() {
+  const series = getDisplaySeries();
+  const tbody = document.getElementById('tbody');
+  const rows = [];
+  const n = series.length;
+
+  let rowCount;
+  if (window.innerWidth <= 720) {
+    rowCount = 5;
+  } else {
+    rowCount = currentGran === 'month' ? 12 : 10;
+  }
+
+  const isMobile = window.innerWidth <= 720;
+
+  for (let i = n - 1; i >= Math.max(0, n - rowCount); i--) {
+    const r = series[i];
+    const p = series[i - 1];
+    const chg = p ? (r.mv / p.mv - 1) * 100 : 0;
+    const v = valuation(r.ratio);
+    const dateLabel = isMobile ? r.date.slice(5) : r.date;  // H5 只显示 MM-DD
+    rows.push(
+      '<tr>' +
+        '<td>' + dateLabel + '</td>' +
+        '<td class="num">' + (r.mv / 10000).toFixed(2) + '</td>' +
+        '<td class="num">' + r.ratio.toFixed(3) + '</td>' +
+        '<td class="num ' + (chg >= 0 ? 'up' : 'down') + '">' +
+          (chg >= 0 ? '+' : '') + chg.toFixed(2) + '%' +
+        '</td>' +
+        '<td><span class="tag ' + v.cls + '">' + v.level + '</span></td>' +
+        '<td>' + v.action + '</td>' +
+      '</tr>'
+    );
+  }
+  tbody.innerHTML = rows.join('');
+}
+
+/* ============================================================
+   8. 错误
+   ============================================================ */
+function showError(err) {
+  const msg = (err && err.message) ? String(err.message) : '';
+  document.getElementById('chart-main').innerHTML =
+    '<div class="err">' +
+      '<div>未找到 <code>market_data.js</code> 或其中数据为空</div>' +
+      '<div>请先运行后端脚本生成该文件，并确保它与本 HTML 在同一目录下</div>' +
+      '<div style="color:#dc2626;font-size:11px;white-space:pre-wrap;text-align:left;max-width:640px;background:#fef2f2;padding:10px 12px;border-radius:8px;line-height:1.7">'
+        + msg + '</div>' +
+    '</div>';
+  console.error(err);
+}
+/* ============================================================
+   9. 启动
+   ============================================================ */
+let resizeTimer = null;
+
+(function main() {
+  const data = window.MARKET_DATA;
+
+  console.log('[诊断] window.MARKET_DATA =', data);
+
+  if (!data) {
+    showError(new Error(
+      'window.MARKET_DATA 未定义。\n' +
+      '常见原因：\n' +
+      '1. market_data.js 未加载（路径 / 文件名大小写不一致）\n' +
+      '2. market_data.js 有 JS 语法错误（控制台应有红色报错，例如 Unexpected token）\n' +
+      '3. market_data.js 被后端中断写入，只剩半截内容或为空文件\n' +
+      '4. 文件不是 UTF-8 编码\n' +
+      '请把控制台中看到的红色报错内容发出来进一步定位。'
+    ));
+    return;
+  }
+
+  if (!data.ashare) {
+    showError(new Error(
+      'window.MARKET_DATA 缺少 ashare 字段。\n' +
+      '实际存在的字段: [' + Object.keys(data).join(', ') + ']'
+    ));
+    return;
+  }
+
+  const ashareKeys = Object.keys(data.ashare);
+  console.log('[诊断] ashare 共', ashareKeys.length, '个交易日');
+  if (ashareKeys.length) {
+    const k = ashareKeys[ashareKeys.length - 1];
+    console.log('[诊断] ashare 最新样例', k, '=>', data.ashare[k]);
+  }
+  console.log('[诊断] bse 共', Object.keys(data.bse || {}).length, '个交易日');
+
+  if (!ashareKeys.length) {
+    showError(new Error(
+      'market_data.js 中 data.ashare 是空对象 {}。\n' +
+      '说明后端脚本还没成功写入过任何数据。'
+    ));
+    return;
+  }
+
+  dailySeries = buildSeries(data.ashare, data.bse || {});
+  console.log('[诊断] dailySeries 构建结果:', dailySeries.length, '条');
+
+  if (!dailySeries.length) {
+    const sample = data.ashare[ashareKeys[0]];
+    showError(new Error(
+      'ashare 有 ' + ashareKeys.length + ' 个日期，但没有任何一条含有效的 ashare_total 数字。\n' +
+      '可能原因：字段名不是 ashare_total，或值不是 number。\n' +
+      '第一条数据样例: ' + JSON.stringify(sample)
+    ));
+    return;
+  }
+
+  renderKPI();
+  renderChart();
+  renderPriceChart();
+  renderTable();
+
+  document.getElementById('granSwitch').addEventListener('click', e => {
+    const btn = e.target.closest('button');
+    if (!btn || btn.classList.contains('active')) return;
+    document.querySelectorAll('#granSwitch button').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    currentGran = btn.dataset.gran;
+    renderChart();
+    renderTable();
+  });
+
+  document.getElementById('trendBtnHigh').addEventListener('click', function () {
+    showTrendHigh = !showTrendHigh;
+    this.classList.toggle('active', showTrendHigh);
+    renderPriceChart();
+  });
+  document.getElementById('trendBtnLow').addEventListener('click', function () {
+    showTrendLow = !showTrendLow;
+    this.classList.toggle('active', showTrendLow);
+    renderPriceChart();
+  });
+  document.getElementById('trendBtnMix').addEventListener('click', function () {
+    showTrendMix = !showTrendMix;
+    this.classList.toggle('active', showTrendMix);
+    renderPriceChart();
+  });
+
+  window.addEventListener('resize', () => {
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(() => {
+      if (!chart) return;
+      const nowMobile = window.innerWidth <= 720;
+      const wasMobile = chart.getOption().grid[0].top === 40;
+      if (nowMobile !== wasMobile) {
+        chart.dispose();
+        chart = null;
+        if (priceChart) { priceChart.dispose(); priceChart = null; }
+        renderChart();
+        renderPriceChart();
+        renderTable();
+      } else {
+        chart.resize();
+        if (priceChart) priceChart.resize();
+      }
+    }, 250);
+  });
+})();
+</script>
+</body>
+</html>
