@@ -25,8 +25,7 @@ jobs:
         pip install pandas requests zzshare
 
     - name: 运行抓取脚本
-      # 如果你的脚本叫 stock_total_mv.py，请把下面改成 python stock_total_mv.py
-      run: python 你的脚本文件名.py
+      run: python stock.py
 
     - name: 提交并推送更新
       run: |
