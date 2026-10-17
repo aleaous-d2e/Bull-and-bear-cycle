@@ -2,19 +2,39 @@ name: Push Notification to WeCom
 
 on:
   push:
-    branches: [ main ]   # 改成你的主分支名，如 master
+    branches: [ main ] # 确认这是你的主分支名
 
 jobs:
   notify:
     runs-on: ubuntu-latest
     steps:
       - name: Send WeCom Notification
+        env:
+          WECOM_WEBHOOK: ${{ secrets.WECOM_WEBHOOK }}
+          SITE_URL: ${{ secrets.SITE_URL }}
+          REPO: ${{ github.repository }}
+          TIMESTAMP: ${{ github.event.head_commit.timestamp }}
+          SHA: ${{ github.sha }}
         run: |
-          curl -H "Content-Type: application/json" \
-          -d "{
-            \"msgtype\": \"markdown\",
-            \"markdown\": {
-              \"content\": \"✅ **代码推送成功，数据已更新**\n> **仓库**: ${{ github.repository }}\n>  **时间**: ${{ github.event.head_commit.timestamp }}\n\n👉 [点击查看最新数据](${{ secrets.SITE_URL }})\"
-            }
-          }" \
-          ${{ secrets.WECOM_WEBHOOK }}
+          # 使用 jq 安全地构造 JSON
+          JSON_PAYLOAD=$(jq -n \
+            --arg repo "$REPO" \
+            --arg time "$TIMESTAMP" \
+            --arg url "${SITE_URL}?v=${SHA}" \
+            '{
+              msgtype: "markdown",
+              markdown: {
+                content: "✅ **代码推送成功，数据已更新**\n>  **时间**: \($time)\n\n👉 [点击查看最新数据](\($url))"
+              }
+            }')
+          
+          # 发送请求，-s 静默输出，-w 打印 HTTP 状态码
+          HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" -H "Content-Type: application/json" -d "$JSON_PAYLOAD" "$WECOM_WEBHOOK")
+          
+          echo "企业微信 API 返回状态码: $HTTP_CODE"
+          
+          if [ "$HTTP_CODE" -ne 200 ]; then
+            echo "推送失败，请检查 Webhook 地址是否正确或存在网络问题。"
+            exit 1
+          fi
+          echo "推送成功！"
