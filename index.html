@@ -608,6 +608,22 @@ function renderKPI() {
 }
 
 /* ============================================================
+   5.1 按月份平移日期（用于计算默认展示区间）
+   ============================================================ */
+function shiftMonths(dateStr, months) {
+  const d = new Date(dateStr + 'T00:00:00');
+  const day = d.getDate();
+  d.setDate(1);
+  d.setMonth(d.getMonth() - months);
+  const lastDay = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
+  d.setDate(Math.min(day, lastDay));
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const dd = String(d.getDate()).padStart(2, '0');
+  return y + '-' + m + '-' + dd;
+}
+
+/* ============================================================
    6. 主图（市值/GDP + 平均股价）
    ============================================================ */
 function renderChart() {
@@ -618,9 +634,20 @@ function renderChart() {
 
   const totalCount = series.length;
   const endDate = series[totalCount - 1].date;
-  const endYear = parseInt(endDate.slice(0, 4));
-  const targetYear = endYear - 3;
-  const targetDateStr = targetYear + endDate.slice(4);
+
+  // 按终端与粒度设置默认展示区间（单位：月）
+  let rangeMonths;
+  if (isMobile) {
+    if (currentGran === 'day')       rangeMonths = 1;   // H5 日线：近 1 个月
+    else if (currentGran === 'week') rangeMonths = 6;   // H5 周线：近半年
+    else                             rangeMonths = 24;  // H5 月线：近 2 年
+  } else {
+    if (currentGran === 'day')       rangeMonths = 6;   // Web 日线：近半年
+    else if (currentGran === 'week') rangeMonths = 24;  // Web 周线：近 2 年
+    else                             rangeMonths = 36;  // Web 月线：保持近 3 年
+  }
+
+  const targetDateStr = shiftMonths(endDate, rangeMonths);
 
   let startIndex = 0;
   for (let i = 0; i < series.length; i++) {
@@ -863,7 +890,8 @@ function renderPriceChart() {
   if (showTrendMix)  trendMix  = buildMixTrend(agg);
 
   const total   = agg.length;
-  const visible = total;
+  // H5 默认展示最近 24 根 K 线；Web 展示全部
+  const visible = isMobile ? Math.min(24, total) : total;
   const startIndex = Math.max(0, total - visible);
 
   if (!priceChart) priceChart = echarts.init(document.getElementById('chart-price'));
