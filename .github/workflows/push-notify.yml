@@ -23,7 +23,7 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: '3.10'
-          cache: 'pip'     # 【新增】自动缓存 pip 依赖，下次运行极速安装
+
 
       # 3. 安装依赖并执行你的 Python 脚本
       # 注意：请把下方 你的脚本文件名.py 换成你实际的 python 文件名 (例如 update_data.py)
