@@ -19,7 +19,8 @@
     background: #f0f2f5; color: #1f2937; padding: 12px;
     -webkit-text-size-adjust: 100%;
   }
-  .wrap { max-width: 1440px; margin: 0 auto; overflow-x: hidden; }
+  /* ★ 整体宽度：由 1440px 改为 1080px */
+  .wrap { max-width: 1080px; margin: 0 auto; overflow-x: hidden; }
 
   header {
     display: flex; align-items: center; justify-content: space-between;
@@ -85,6 +86,12 @@
 
   .chart { width: 100%; height: 440px; }
   .chart-sm { height: 420px; }
+
+  /* ★ 平均股价月线图：整体宽度固定 1080px，
+       卡片左右内边距归零，让图表的实际宽度正好等于 1080px */
+  .chart-price-card { padding-left: 0; padding-right: 0; }
+  .chart-price-card #chart-price { width: 1080px; max-width: 100%; margin: 0 auto; }
+  .chart-price-card .chart-toolbar { padding-left: 8px; padding-right: 8px; }
 
   .chart-note {
     padding: 12px 14px 16px;
@@ -289,10 +296,10 @@
     T日平均股价计算：所有T日有交易股票收盘价汇总 / 所有T日交易股票数量
   </div>
 </div>
-  </div>
 
   <!-- 平均股价 K 线（月线，含三条可切换趋势线） -->
-  <div class="card chart-card">
+  <!-- ★ 新增 chart-price-card：让该图整体宽度固定为 1080px -->
+  <div class="card chart-card chart-price-card">
     <div class="chart-toolbar">
       <div class="chart-title">平均股价 · 月线</div>
       <button id="trendBtnHigh" class="trend-btn high active">高位风险</button>
@@ -658,9 +665,10 @@ function renderChart() {
   if (!chart) chart = echarts.init(document.getElementById('chart-main'));
 
   chart.setOption({
+    // ★ 缩小了主图的左右宽距（Web端由 100 改为 60）
     grid: isMobile
-      ? { left: 34, right: 34, top: 40, bottom: 50 }
-      : { left: 100, right: 100, top: 50, bottom: 66 },
+      ? { left: 34, right: 34, top: 40, bottom: 60 }
+      : { left: 45, right: 45, top: 50, bottom: 70 },
 
     legend: {
       top: 0, left: 'center',
@@ -705,6 +713,10 @@ function renderChart() {
         name: isMobile ? '' : '市值/GDP',
         nameTextStyle: { color: '#2563eb', fontSize: 12 },
         position: 'left',
+        // ★ 如果想让刻度固定范围，可以在下面加 min 和 max
+        min: 0.15, max: 1.5,
+        // ★ 如果想调整标题“市值/GDP”距离轴线的距离，可以加 nameGap
+        nameGap: 25,
         axisLine: { show: false }, axisTick: { show: false },
         splitLine: { lineStyle: { color: '#f3f4f6' } },
         axisLabel: { color: '#2563eb', fontSize: isMobile ? 10 : 11 }
@@ -716,7 +728,7 @@ function renderChart() {
         position: 'right',
         axisLine: { show: false }, axisTick: { show: false },
         splitLine: { show: false },
-        min: 0, max: 100,
+        min: 4.5, max: 36,
         axisLabel: { color: '#f59e0b', fontSize: isMobile ? 10 : 11 }
       }
     ],
@@ -769,7 +781,8 @@ function renderChart() {
         type: 'line', yAxisIndex: 1,
         data: series.map(s => s.price),
         smooth: true, symbol: 'none', sampling: 'lttb',
-        lineStyle: { width: isMobile ? 1.2 : 1.6, color: '#f59e0b', type: 'dashed' }
+        // ★ 平均股价改用实线（去掉了 type: 'dashed'）
+        lineStyle: { width: isMobile ? 1.2 : 1.6, color: '#f59e0b' }
       }
     ]
   }, true);
@@ -890,8 +903,9 @@ function renderPriceChart() {
   if (showTrendMix)  trendMix  = buildMixTrend(agg);
 
   const total   = agg.length;
-  // H5 默认展示最近 24 根 K 线；Web 展示全部
-  const visible = isMobile ? Math.min(24, total) : total;
+  /* ★ 平均股价月线图：Web 默认展示最近 72 根 K 线，H5 默认展示最近 60 根 K 线，
+       这 60/72 根 K 线整体铺满 1080px 宽度（宽度由 .chart-price-card #chart-price 控制） */
+  const visible = isMobile ? Math.min(60, total) : Math.min(72, total);
   const startIndex = Math.max(0, total - visible);
 
   if (!priceChart) priceChart = echarts.init(document.getElementById('chart-price'));
@@ -901,7 +915,7 @@ function renderPriceChart() {
       name: '平均股价',
       type: 'candlestick',
       data: ohlc,
-      barMaxWidth: 14,
+      barMaxWidth: 6,   // ★ 宽度缩小点，避免 72 根 K 线过于拥挤
       itemStyle: {
         color: '#ef4444',
         color0: '#10b981',
