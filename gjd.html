@@ -1,0 +1,625 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>国家队行为框架的周期校准（2008–2026）</title>
+<style>
+  :root{
+    --bg:#f2f4f7; --card:#ffffff; --ink:#151b28; --ink2:#3d4657;
+    --muted:#6b7484; --line:#e4e7ee; --line2:#eef0f4;
+    --accent:#12395f; --accent-soft:#e9eff6;
+    --red:#c94137; --green:#2f855a; --gold:#a67c1a; --blue:#2b6cb0;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0; background:var(--bg); color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;
+    line-height:1.78; -webkit-font-smoothing:antialiased;
+  }
+  .wrap{max-width:1180px; margin:0 auto; padding:0 24px 90px;}
+  header{
+    background:linear-gradient(150deg,#0e2a47 0%,#12395f 55%,#1b4b78 100%);
+    color:#fff; padding:56px 0 46px; margin-bottom:-40px;
+  }
+  header .wrap{padding-bottom:0;}
+  .kicker{font-size:12px; letter-spacing:.22em; text-transform:uppercase; color:#8fb4d8; margin:0 0 14px; font-weight:600;}
+  h1{font-size:34px; line-height:1.32; margin:0 0 14px; font-weight:700; letter-spacing:-.01em;}
+  .sub{font-size:15px; color:#b9cde0; margin:0; max-width:820px; line-height:1.7;}
+
+  .card{
+    background:var(--card); border-radius:14px; padding:34px 38px;
+    box-shadow:0 1px 2px rgba(20,30,50,.05), 0 8px 26px rgba(20,30,50,.05);
+    margin-bottom:24px;
+  }
+  section{scroll-margin-top:24px;}
+  h2{font-size:20px; margin:0 0 16px; font-weight:700; letter-spacing:-.01em; display:flex; align-items:center; gap:12px;}
+  h2 .num{display:inline-flex; align-items:center; justify-content:center; width:26px; height:26px; border-radius:7px; background:var(--accent); color:#fff; font-size:13px; font-weight:700; flex:0 0 auto;}
+  h3{font-size:15.5px; margin:26px 0 10px; font-weight:700; color:var(--ink);}
+  h3:first-child{margin-top:0;}
+  p{margin:0 0 14px; color:var(--ink2); font-size:14.5px; text-align:justify;}
+  p.lead{font-size:15.5px; color:var(--ink);}
+  .muted{color:var(--muted); font-size:12.8px; line-height:1.7;}
+  strong{color:var(--ink); font-weight:600;}
+  em{font-style:normal; color:var(--accent); font-weight:600;}
+
+  .stats{display:grid; grid-template-columns:repeat(auto-fit, minmax(200px,1fr)); gap:14px; margin:0 0 24px;}
+  .stat{background:var(--card); border-radius:12px; padding:20px 22px; box-shadow:0 1px 2px rgba(20,30,50,.05), 0 6px 18px rgba(20,30,50,.04); border-top:3px solid var(--accent);}
+  .stat .v{font-size:25px; font-weight:700; letter-spacing:-.02em; color:var(--accent); line-height:1.25;}
+  .stat .v small{font-size:13px; font-weight:600; color:var(--muted); margin-left:3px;}
+  .stat .k{font-size:12.5px; color:var(--muted); margin-top:5px; letter-spacing:.02em;}
+  .stat.g{border-top-color:var(--green);} .stat.g .v{color:var(--green);}
+  .stat.r{border-top-color:var(--red);} .stat.r .v{color:var(--red);}
+  .stat.b{border-top-color:var(--blue);} .stat.b .v{color:var(--blue);}
+
+  .table-wrap{overflow-x:auto; margin:6px -6px 4px; padding:0 6px;}
+  table.tbl{width:100%; border-collapse:collapse; font-size:13.6px; min-width:640px;}
+  .tbl th{background:#f6f8fb; color:var(--ink2); font-weight:600; text-align:left; padding:11px 14px; border-bottom:1px solid var(--line); font-size:12.4px; letter-spacing:.03em; white-space:nowrap;}
+  .tbl td{padding:12px 14px; border-bottom:1px solid var(--line2); vertical-align:top; color:var(--ink2); line-height:1.65;}
+  .tbl tbody tr:last-child td{border-bottom:none;}
+  .tbl tbody tr:hover{background:#fafbfd;}
+  .tbl .hl{color:var(--ink); font-weight:600;}
+  .tbl .sm{font-size:12.3px; color:var(--muted);}
+  .tbl .sub-row td{background:#fbfcfe;}
+  .tag{display:inline-block; padding:1px 7px; border-radius:5px; font-size:11.5px; font-weight:600; letter-spacing:.02em; white-space:nowrap;}
+  .tag.yes{background:#e7f4ec; color:#1f6b45;}
+  .tag.no{background:#fdecea; color:#a8332a;}
+  .tag.warn{background:#fdf3e0; color:#8a6412;}
+
+  .chart-shell{background:var(--card); border-radius:14px; padding:26px 26px 18px; box-shadow:0 1px 2px rgba(20,30,50,.05), 0 8px 26px rgba(20,30,50,.05); margin-bottom:24px;}
+  .chart-head{display:flex; flex-wrap:wrap; justify-content:space-between; align-items:flex-end; gap:12px; margin-bottom:6px;}
+  .chart-title{font-size:17px; font-weight:700; margin:0;}
+  .chart-sub{font-size:12.6px; color:var(--muted); margin:3px 0 0;}
+  .legend{display:flex; flex-wrap:wrap; gap:16px; font-size:12.3px; color:var(--ink2);}
+  .legend i{display:inline-block; width:14px; height:3px; border-radius:2px; margin-right:6px; vertical-align:middle;}
+  .legend .sw-dash{width:14px; height:0; border-top:2px dashed var(--blue); background:none;}
+  .chart-scroll{overflow-x:auto; margin:10px -4px 0; padding:0 4px;}
+  svg#chart{display:block; width:100%; min-width:860px; height:auto; font-family:inherit;}
+  .ax{font-size:11.5px; fill:#98a1b0;}
+  .ax-y{font-size:11.5px; fill:#98a1b0;}
+  .plab{font-size:13px; font-weight:700; fill:#20304a;}
+  .plab.minor{font-size:11px; font-weight:600; fill:#9aa4b2;}
+  .ttl{font-size:11.5px; fill:#8b94a3;}
+
+  .callout{border-left:3px solid var(--accent); background:var(--accent-soft); padding:16px 20px; border-radius:0 10px 10px 0; margin:18px 0; font-size:14px; color:#20304a; line-height:1.75;}
+  .callout.warn{border-left-color:var(--gold); background:#fdf7ea;}
+  .callout.risk{border-left-color:var(--red); background:#fdf0ee;}
+  .callout .t{font-weight:700; display:block; margin-bottom:5px; color:var(--ink); font-size:13.5px;}
+
+  .grid2{display:grid; grid-template-columns:1fr 1fr; gap:22px;}
+  @media(max-width:820px){
+    .grid2{grid-template-columns:1fr;}
+    h1{font-size:25px;}
+    .card{padding:26px 22px;}
+    header{padding:40px 0 36px;}
+  }
+  footer{text-align:center; font-size:12.3px; color:var(--muted); padding:10px 0 0; line-height:1.8;}
+  .divider{height:1px; background:var(--line); margin:26px 0;}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="wrap">
+    <p class="kicker">National Team Behavior · Cycle Calibration</p>
+    <h1>国家队行为框架的周期校准（2008–2026）</h1>
+    <p class="sub">工具演化、时滞压缩与平准基金的实质性落地——将“事件驱动、逆周期调节”框架投射到两轮完整牛熊周期。</p>
+    <div class="meta" style="margin-top:26px; display:flex; flex-wrap:wrap; gap:10px 26px; font-size:12.5px; color:#8fb4d8; letter-spacing:.04em;">
+      <span><i style="width:5px;height:5px;border-radius:50%;background:#5f8cba;display:inline-block;margin-right:7px;"></i>数据截至 2026 年 10 月</span>
+      <span><i style="width:5px;height:5px;border-radius:50%;background:#5f8cba;display:inline-block;margin-right:7px;"></i>广义国家队：汇金、证金、国新、诚通及平准基金机制</span>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+
+  <!-- ================= 核心判断 ================= -->
+  <section class="card">
+    <h2><span class="num">0</span>核心判断</h2>
+    <p class="lead">将 2016–2026 年的国家队行为置于更长周期中观察，可以提炼出一条比“脉冲式托底”更精确的主线：<strong>工具在演化，时滞在收窄，且从2024年起，具备“无限子弹”预期的平准基金机制已实质性落地。</strong></p>
+    <p>过去，市场对“国家队”的理解多停留在汇金、证金等主体。但以2024年汇金获央行再贷款支持为分水岭，中国版平准基金正式从幕后走向台前。平准基金的本质不仅是“买什么”，更是“资金规模和预期管理的质变”。它向市场提供了最后贷款人背书，使得熊市托底“政策底与市场底趋于同步”；而在牛市退出时，宽基ETF集中赎回则成为平准基金层面最高级别的“政策表态”。</p>
+  </section>
+
+  <div class="stats">
+    <div class="stat g">
+      <div class="v">6个月 <small>→</small> 同步</div>
+      <div class="k">历轮托底时滞压缩（2015→2024）<br><span class="muted" style="font-size:11px;">平准基金“最后贷款人”机制消除了持续下跌预期</span></div>
+    </div>
+    <div class="stat b">
+      <div class="v">1.53<small>万亿</small></div>
+      <div class="k">2025年9月末以汇金为代表的平准基金ETF持仓峰值</div>
+    </div>
+    <div class="stat r">
+      <div class="v">5590<small>亿</small></div>
+      <div class="k">2026年1月平准基金宽基ETF集中赎回规模</div>
+    </div>
+    <div class="stat">
+      <div class="v">1404<small>只</small></div>
+      <div class="k">2015年三季度末传统国家队持股数量（后降至1140只）</div>
+    </div>
+  </div>
+
+  <!-- ================= 一、风格演化 ================= -->
+  <section class="card">
+    <h2><span class="num">1</span>国家队风格的阶段性演化：从“救火队”到“平准基金”</h2>
+    <p>工具演化的实质不是风格的“软化”，而是<em>操作精度、资金来源与信号含义的全面升级</em>。2015年的救市具有强烈的“救火队”色彩；而2024年央行下场提供再贷款，标志着平准基金机制真正成为市场的压舱石。</p>
+
+    <div class="table-wrap">
+      <table class="tbl">
+        <thead>
+          <tr>
+            <th style="width:14%">阶段</th>
+            <th style="width:12%">时间区间</th>
+            <th style="width:18%">主导工具与资金源</th>
+            <th>操作特征</th>
+            <th style="width:22%">核心驱动</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="hl">个股直接持有期<br><span class="sm">（传统救火队）</span></td>
+            <td>2015–2017</td>
+            <td>证金、汇金直接增持个股<br><span class="sm">（券商自营、银行授信等）</span></td>
+            <td>2015年三季度末持股覆盖 A 股约半数公司，救市资金逾 1.26 万亿元；此后进入存量消化，持股数量从 1404 只降至 1140 只，市值稳定在 1.07–1.11 万亿元。</td>
+            <td>股灾后阻断踩踏，消化天量救市仓位。资金规模虽大，但缺乏明确的“无限”预期。</td>
+          </tr>
+          <tr>
+            <td class="hl">ETF 切换过渡期</td>
+            <td>2018–2021</td>
+            <td>证金、汇金申购宽基 ETF</td>
+            <td>2018 年 10 月全市场 ETF 净流入约 425 亿元；2021 年减持以个股为单位，Q3 证金减持 33 家、仅增持 7 家。</td>
+            <td>去杠杆+贸易摩擦下护盘方式的成本与可见度权衡；结构性牛市中个股层面逢高兑现。</td>
+          </tr>
+          <tr>
+            <td class="hl">平准基金实质落地<br><span class="sm">（央行背书期）</span></td>
+            <td>2024–2026</td>
+            <td>汇金四大主体持有宽基 ETF<br><strong>央行再贷款提供流动性支持</strong></td>
+            <td>2024 年末汇金持有股票型 ETF 规模达 1.04 万亿元；2025 年 9 月末达 1.53 万亿元；2026 年初集中赎回，1 月约 12 只 ETF 合计流出 5590.87 亿元。</td>
+            <td>以央行信用为后盾，向市场注入“无限子弹”预期。既在急跌时高效阻断负反馈，也在过热时以 ETF 为“政策表态”载体迅速降温。</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- ================= 二、时滞矩阵 ================= -->
+  <section class="card">
+    <h2><span class="num">2</span>政策底 / 顶与市场底 / 顶的时滞矩阵</h2>
+    <p>下表将历次主要托底案例与退出/调控案例并置。平准基金机制落地后，由于市场不再怀疑托底资金的持续性，时滞被极度压缩。</p>
+
+    <h3>2.1 熊市托底：政策底 → 市场底</h3>
+    <div class="table-wrap">
+      <table class="tbl">
+        <thead>
+          <tr>
+            <th style="width:14%">周期</th>
+            <th style="width:26%">政策底信号</th>
+            <th style="width:20%">市场底</th>
+            <th style="width:16%">时滞</th>
+            <th>后续确认</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="hl">2008年</td>
+            <td>9 月汇金增持四大行</td>
+            <td>10 月 1664 点</td>
+            <td>约 40 天</td>
+            <td>强反弹后二次探底</td>
+          </tr>
+          <tr>
+            <td class="hl">2012–2013年</td>
+            <td>2011.10–2013.6 汇金多轮增持，含申购蓝筹 ETF</td>
+            <td>2012.12 的 1949 点；2013.6 的 1849 点</td>
+            <td>政策底反复失效，第三次探底后确认</td>
+            <td>底部震荡约一年，2014 年 7 月启动改革牛</td>
+          </tr>
+          <tr>
+            <td class="hl">2015年</td>
+            <td>7 月证金万亿级救市</td>
+            <td>2016 年 1 月 2638 点</td>
+            <td>约 6 个月</td>
+            <td>反弹后股灾 2.0，杠杆出清才见底</td>
+          </tr>
+          <tr>
+            <td class="hl">2018年</td>
+            <td>10 月纾困 + ETF 集中申购</td>
+            <td>2019 年 1 月 2440 点</td>
+            <td>约 2.5 个月</td>
+            <td>未明显创新低，开启 2019–2021 结构牛</td>
+          </tr>
+          <tr>
+            <td class="hl" rowspan="2">2024年<br><span class="sm">（平准基金机制下的双底）</span></td>
+            <td><strong>第一底：</strong>2 月 6 日汇金公告扩大 ETF 增持范围（央行再贷款支持）</td>
+            <td>2 月 5 日 2635 点</td>
+            <td>几乎同步，市场底略早于公告</td>
+            <td>反弹至 5 月 3174 点，未确认反转</td>
+          </tr>
+          <tr class="sub-row">
+            <td><strong>第二底：</strong>9 月中下旬国新、诚通入场，叠加“924”政策组合拳</td>
+            <td>9 月 18 日 2689 点</td>
+            <td>市场底先于政策组合拳，政策定性完成最终确认</td>
+            <td>双底确立，开启新一轮行情</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>2.2 牛市调控与退出：政策顶 → 市场顶</h3>
+    <div class="table-wrap">
+      <table class="tbl">
+        <thead>
+          <tr>
+            <th style="width:14%">周期</th>
+            <th style="width:24%">政策顶 / 干预信号</th>
+            <th style="width:16%">市场顶</th>
+            <th style="width:22%">国家队当时角色</th>
+            <th>信号与后续</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="hl">2009–2010年</td>
+            <td>2009年8月央行收紧信贷；2010年4月“国十条”</td>
+            <td>2009年8月 3478点<br>2010年4月 3181点</td>
+            <td><strong>未作为退出工具</strong><br><span class="sm">汇金甚至在2011年转为增持</span></td>
+            <td>宏观政策直接刺破估值，此时尚无平准基金退出概念。</td>
+          </tr>
+          <tr>
+            <td class="hl">2015年</td>
+            <td>6月监管层强力清查场外配资</td>
+            <td>6月12日 5178点</td>
+            <td><strong>未减持，随后转为救市</strong><br><span class="sm">7月证金携万亿入场</span></td>
+            <td>政策顶与市场顶同步。打压引发流动性危机，国家队是被动接盘方。</td>
+          </tr>
+          <tr>
+            <td class="hl">2019–2021年</td>
+            <td>2021年初，监管收紧公募发行，反垄断等</td>
+            <td>2021年2月 3731点</td>
+            <td><strong>个股渐进减持</strong><br><span class="sm">2020Q4起减持券商、白马</span></td>
+            <td>减持分散，无ETF集中流出，不构成平准基金级别的宏观顶部信号。</td>
+          </tr>
+          <tr>
+            <td class="hl">2024–2026年</td>
+            <td>2026年初监管上调融资保证金比例，定性“防止大起大落”</td>
+            <td>2026年1月 4197点</td>
+            <td><strong>平准基金集中赎回（政策表态）</strong><br><span class="sm">宽基ETF集中流出5590亿</span></td>
+            <td>政策顶≈市场顶。首次以“平准基金宽基ETF集中流出+降温”形式出现，信号级别极高。</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="callout warn">
+      <span class="t">核心结论：“平准基金”改变了博弈均衡</span>
+      在传统国家队时期（如2015年、2018年），市场会不断测试其资金底线，导致政策底到市场底产生较长的时滞。而当央行再贷款支持的平准基金落地（2024年），其“最后贷款人”的信用背书直接封杀了空头的想象空间。同样，当2026年平准基金在ETF层面进行集中赎回时，它传递的不再是“换仓”，而是“最高级别政策降温”，其顶部信号的可靠性被空前强化。
+    </div>
+  </section>
+
+  <!-- ================= 三、图表 ================= -->
+  <section class="chart-shell">
+    <div class="chart-head">
+      <div>
+        <p class="chart-title">上证指数月线结构与国家队行为节点（2007.10–2026.05）</p>
+        <p class="chart-sub">标注为月线级别牛熊极值；底部蓝色标记为主要平准/救市动作时点</p>
+      </div>
+      <div class="legend">
+        <span><i style="background:var(--red)"></i>上行段</span>
+        <span><i style="background:var(--green)"></i>下行段</span>
+        <span><i class="sw-dash"></i>国家队动作</span>
+      </div>
+    </div>
+
+    <div class="chart-scroll">
+      <svg id="chart" viewBox="0 0 1120 600" preserveAspectRatio="xMidYMid meet" role="img"
+           aria-label="上证指数月线折线图，2007年10月至2026年5月"></svg>
+    </div>
+    <p class="muted" style="margin-top:14px;">
+      数据说明：曲线为基于文档所载关键极值（6124 / 1664 / 3478 / 1949 / 1849 / 5178 / 2638 / 3587 / 2440 / 3731 / 2635 / 2689 / 4258 等）的示意重建。2024年的双底结构（2月2635点与9月2689点）在平准基金预期下接力完成，每一次底部的时滞都被压缩至极致。
+    </p>
+  </section>
+
+  <!-- ================= 四、时滞成因 ================= -->
+  <section class="card">
+    <h2><span class="num">3</span>时滞差异的成因：从基本面恶化到平准基金背书</h2>
+    <p>托底时滞从 2008 年的 40 天、2015 年的 6 个月、2018 年的 2.5 个月，压缩至 2024–2025 年的“几乎同步”，平准基金机制是关键催化。</p>
+
+    <div class="grid2">
+      <div>
+        <h3>为何过去时滞长？基本面与流动性双杀</h3>
+        <p>2011-2013年的A股，面临的是典型的经济“三期叠加”。四万亿刺激后，传统制造业面临严重的产能过剩，PPI连续数十个月负增长，企业利润大幅萎缩。此时，企业和居民都在修复资产负债表，信用扩张无法传导至实体。</p>
+        <p>传统国家队资金入场（政策底），只能解决“流动性危机”，但无法改变企业利润（分子端）的持续下滑。在盈利底迟迟无法确认的背景下，任何由于政策刺激带来的上涨都会因为缺乏基本面支撑而夭折。直到2014年产能出清接近尾声，市场才真正走出底部。</p>
+      </div>
+      <div>
+        <h3>为何现在时滞极短？平准基金封杀下跌空间</h3>
+        <p>2024年2月的雪球衍生品平仓、2025年4月的关税冲击，其杀伤机制是流动性负反馈和情绪坍缩。此时，央行直接下场为汇金提供再贷款支持，实际上宣告了“平准基金”拥有无限开火权。</p>
+        <p>对于市场而言，这相当于提供了一个免费的看跌期权（Put Option）。套利资金和国家队形成合力，直接阻断了杠杆平仓带来的“下跌-强平-再下跌”负反馈链条。因为资金是“无限”的，市场不再需要等待漫长的出清，从而实现了政策底与市场底的瞬间重合。</p>
+      </div>
+    </div>
+
+    <div class="callout">
+      <span class="t">2015 年的 6 个月时滞则是转型期的阵痛</span>
+      证金万亿级入场阻断了 7 月的踩踏，但配资和减持压力未消，且当时国家队并未获得央行“无限子弹”的正式承诺，杠杆出清在 2016 年 1 月熔断中才最终完成。这也反向印证了为何 2024 年的平准基金机制如此重要。
+    </div>
+  </section>
+
+  <!-- ================= 五、对照框架 ================= -->
+  <section class="card">
+    <h2><span class="num">4</span>两轮牛熊的对照框架</h2>
+    <div class="table-wrap">
+      <table class="tbl">
+        <thead>
+          <tr>
+            <th style="width:20%">维度</th>
+            <th style="width:40%">2016–2021 周期</th>
+            <th>2024–2026 周期（平准基金期）</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td class="hl">托底资金来源</td><td>证金自筹、汇金自有资金</td><td>汇金自有 + <strong>央行再贷款背书</strong>（准无限流动性）</td></tr>
+          <tr><td class="hl">托底工具</td><td>个股为主，2018 年起转向 ETF</td><td>以宽基 ETF 为核心载体</td></tr>
+          <tr><td class="hl">政策底 → 市场底</td><td>2015 年 <strong>6 个月</strong>；2018 年 <strong>2.5 个月</strong></td><td>2024–2025 年 <strong>1–4 个交易日</strong>，近乎同步</td></tr>
+          <tr><td class="hl">牛市退出方式</td><td>个股渐进减持（2020Q4 起）</td><td>宽基 ETF 集中赎回（2026 年初）</td></tr>
+          <tr><td class="hl">政策顶的可识别性</td><td><span class="tag no">低</span> 减持分散，属于组合管理</td><td><span class="tag yes">高</span> 宽基 ETF 集中流出，属于平准基金政策表态</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- ================= 六、结论 ================= -->
+  <section class="card">
+    <h2><span class="num">5</span>结论：平准基金重塑了市场博弈生态</h2>
+
+    <h3>第一，平准基金意味着“最后贷款人”直接进入股市</h3>
+    <p>当央行再贷款与汇金（类平准基金）结合，政策底与市场底被极限压缩。这极大地降低了市场急跌时的恐慌程度，但也意味着普通投资者“跟随国家队抄底”的赔率在同步收窄。同步托底本身是效率提升的证据，不是持续可套利的机会。</p>
+
+    <h3>第二，牛市顶部信号上升到“平准基金级别”</h3>
+    <p>熊市托底有客观触发条件；而牛市退出中，减持是否上升到 ETF 层面、是否伴随政策定性，取决于决策层对“过热”的判断。当平准基金用宽基 ETF 集中赎回（如2026年初）进行降温时，其传达的政策意志绝非个股减持可比，构成明确的宏观顶部坐标。</p>
+
+    <h3>第三，2024 年双底标志着托底机制的成熟</h3>
+    <p>单一政策底不足以保证市场底，即使是ETF工具和央行后盾的组合，也需要“接力”和最终的政策定性来完成底部确认（924政策组合拳）。2012–2013年的基本面磨底教训在平准基金时代并未完全失效，只是出清的时间被大幅缩短了。</p>
+  </section>
+
+  <footer>
+    国家队行为框架的周期校准（2008–2026） · 研究笔记<br>
+    本报告基于公开信息整理，图表为基于关键极值的示意性重建，不构成任何投资建议。
+  </footer>
+</div>
+
+<script>
+(function(){
+  "use strict";
+
+  function ym2i(s){ const p = s.split('-'); return (+p[0]) * 12 + (+p[1]) - 1; }
+  function i2ym(i){ return Math.floor(i/12) + '-' + String(i%12+1).padStart(2,'0'); }
+  function rnd(s){ const x = Math.sin(s) * 43758.5453; return x - Math.floor(x); }
+
+  const PIVOTS = [
+    { d:'2007-10', v:6124, lab:'6124', pos:'above' },
+    { d:'2008-10', v:1664, lab:'1664', pos:'below' },
+    { d:'2009-08', v:3478, lab:'3478', pos:'above' },
+    { d:'2012-12', v:1949, lab:'1949', pos:'below', anchor:'end', dx:-8 },
+    { d:'2013-06', v:1849, lab:'1849', pos:'below', anchor:'start', dx:10, dy:6 },
+    { d:'2015-06', v:5178, lab:'5178', pos:'above' },
+    { d:'2015-07', v:4184, minor:true, pos:'above' },
+    { d:'2016-01', v:2638, lab:'2638', pos:'below', anchor:'end', dx:-8 },
+    { d:'2018-01', v:3587, lab:'3587', pos:'above' },
+    { d:'2019-01', v:2440, lab:'2440', pos:'below' },
+    { d:'2021-02', v:3731, lab:'3731', pos:'above' },
+    { d:'2024-02', v:2635, lab:'2635', pos:'below', anchor:'end', dx:-10 },
+    { d:'2024-05', v:3174, minor:true, pos:'above' },
+    { d:'2024-09', v:2689, lab:'2689', pos:'below', anchor:'start', dx:12, dy:10 },
+    { d:'2026-01', v:4197, lab:'4197', pos:'above', anchor:'end', dx:-6 },
+    { d:'2026-05', v:4258, lab:'4258', pos:'above', anchor:'start', dx:4, dy:-6 }
+  ];
+
+  const EVENTS = [
+    { d:'2008-09', t:'汇金增持四大行' },
+    { d:'2011-10', t:'汇金第三轮增持启动' },
+    { d:'2013-06', t:'汇金增持金融股并申购蓝筹ETF' },
+    { d:'2015-07', t:'证金万亿级救市' },
+    { d:'2018-10', t:'证金汇金扎堆宽基ETF' },
+    { d:'2020-12', t:'个股层面渐进减持启动' },
+    { d:'2024-02', t:'汇金获央行再贷款，扩大ETF增持' },
+    { d:'2024-09', t:'国新、诚通入场 + 924组合拳' },
+    { d:'2026-01', t:'平准基金宽基ETF集中赎回' }
+  ];
+
+  const W = 1120, H = 600;
+  const PAD = { t: 58, r: 58, b: 78, l: 74 };
+  const YMAX = 6600, YMIN = 0;
+  const X0 = ym2i('2007-10');
+  const X1 = ym2i('2026-05');
+
+  const X = i => PAD.l + (i - X0) / (X1 - X0) * (W - PAD.l - PAD.r);
+  const Y = v => PAD.t + (1 - (v - YMIN) / (YMAX - YMIN)) * (H - PAD.t - PAD.b);
+
+  const segs = [];
+  const ALL = [];
+
+  for (let k = 0; k < PIVOTS.length - 1; k++) {
+    const a = PIVOTS[k], b = PIVOTS[k + 1];
+    const ia = ym2i(a.d), ib = ym2i(b.d);
+    const span = Math.max(1, ib - ia);
+    const amp = Math.abs(b.v - a.v) * 0.075 + 45;
+    const pts = [];
+
+    for (let i = ia; i < ib; i++) {
+      const t = (i - ia) / span;
+      const base = a.v + (b.v - a.v) * t;
+      const env = Math.sin(Math.PI * t);
+      const osc =
+        Math.sin(t * Math.PI * (2 + (k % 3)) + k * 1.9) * 0.55 +
+        Math.sin(t * Math.PI * (3.7 + (k % 2)) + k * 1.1) * 0.45;
+      const noise = (rnd(i * 1.317 + k * 7.233) - 0.5) * 0.55;
+      const v = base + (amp * osc + amp * noise) * env;
+      pts.push({ i: i, v: Math.max(300, v) });
+    }
+    pts.push({ i: ib, v: b.v });
+
+    segs.push({ pts: pts, up: b.v >= a.v });
+    for (const p of pts) {
+      if (!ALL.length || ALL[ALL.length - 1].i !== p.i) ALL.push(p);
+    }
+  }
+
+  let s = '';
+  s += '<defs>';
+  s += '<linearGradient id="gUp" x1="0" y1="0" x2="0" y2="1">';
+  s += '<stop offset="0%" stop-color="#c94137" stop-opacity="0.14"/>';
+  s += '<stop offset="100%" stop-color="#c94137" stop-opacity="0.01"/>';
+  s += '</linearGradient>';
+  s += '<linearGradient id="gDown" x1="0" y1="0" x2="0" y2="1">';
+  s += '<stop offset="0%" stop-color="#2f855a" stop-opacity="0.12"/>';
+  s += '<stop offset="100%" stop-color="#2f855a" stop-opacity="0.01"/>';
+  s += '</linearGradient>';
+  s += '</defs>';
+
+  for (let v = 0; v <= 6000; v += 1000) {
+    const y = Y(v);
+    s += `<line x1="${PAD.l}" y1="${y}" x2="${W - PAD.r}" y2="${y}" stroke="#eef0f4" stroke-width="1"/>`;
+    s += `<text class="ax-y" x="${PAD.l - 14}" y="${y + 4}" text-anchor="end">${v}</text>`;
+  }
+  s += `<line x1="${PAD.l}" y1="${Y(0)}" x2="${W - PAD.r}" y2="${Y(0)}" stroke="#dfe3ea" stroke-width="1.2"/>`;
+
+  for (let yr = 2008; yr <= 2026; yr++) {
+    const i = yr * 12;
+    if (i < X0 || i > X1) continue;
+    const x = X(i);
+    s += `<line x1="${x}" y1="${PAD.t}" x2="${x}" y2="${H - PAD.b}" stroke="#f2f4f7" stroke-width="1"/>`;
+    s += `<text class="ax" x="${x}" y="${H - PAD.b + 24}" text-anchor="middle">${yr}</text>`;
+  }
+
+  for (const ev of EVENTS) {
+    const i = ym2i(ev.d);
+    if (i < X0 || i > X1) continue;
+    const x = X(i);
+    s += `<line x1="${x}" y1="${PAD.t}" x2="${x}" y2="${H - PAD.b}" stroke="#2b6cb0" stroke-width="1.1" stroke-dasharray="4 5" opacity="0.32"/>`;
+  }
+
+  for (const seg of segs) {
+    const pts = seg.pts;
+    if (pts.length < 2) continue;
+    let d = '';
+    for (let i = 0; i < pts.length; i++) {
+      d += (i === 0 ? 'M' : 'L') + X(pts[i].i).toFixed(1) + ',' + Y(pts[i].v).toFixed(1);
+    }
+    const first = pts[0], last = pts[pts.length - 1];
+    const dArea = d + `L${X(last.i).toFixed(1)},${Y(0)}L${X(first.i).toFixed(1)},${Y(0)}Z`;
+    const fill = seg.up ? 'url(#gUp)' : 'url(#gDown)';
+    const stroke = seg.up ? '#c94137' : '#2f855a';
+
+    s += `<path d="${dArea}" fill="${fill}" stroke="none"/>`;
+    s += `<path d="${d}" fill="none" stroke="${stroke}" stroke-width="2.1" stroke-linejoin="round" stroke-linecap="round"/>`;
+  }
+
+  for (const pv of PIVOTS) {
+    const i = ym2i(pv.d);
+    const x = X(i), y = Y(pv.v);
+    const color = pv.pos === 'above' ? '#c94137' : '#2f855a';
+
+    s += `<circle cx="${x}" cy="${y}" r="${pv.minor ? 3 : 4.4}" fill="#fff" stroke="${color}" stroke-width="2"/>`;
+
+    if (pv.lab) {
+      const dx = pv.dx || 0;
+      let dy = pv.dy || 0;
+      dy += pv.pos === 'above' ? -13 : 22;
+      const anchor = pv.anchor || 'middle';
+      s += `<text class="plab" x="${(x + dx).toFixed(1)}" y="${(y + dy).toFixed(1)}" text-anchor="${anchor}">${pv.lab}</text>`;
+    } else if (pv.minor) {
+      const dy = pv.pos === 'above' ? -10 : 16;
+      s += `<text class="plab minor" x="${x.toFixed(1)}" y="${(y + dy).toFixed(1)}" text-anchor="middle">${pv.v}</text>`;
+    }
+  }
+
+  for (const ev of EVENTS) {
+    const i = ym2i(ev.d);
+    if (i < X0 || i > X1) continue;
+    const x = X(i);
+    const yb = H - PAD.b + 36;
+    s += `<g><title>${ev.d} · ${ev.t}</title>`;
+    s += `<path d="M${x},${yb - 6} L${x - 5.5},${yb + 4} L${x + 5.5},${yb + 4} Z" fill="#2b6cb0" opacity="0.72"/>`;
+    s += `</g>`;
+  }
+
+  s += `<text class="ttl" x="${PAD.l - 14}" y="${PAD.t - 22}" text-anchor="end">上证指数</text>`;
+  s += `<text class="ttl" x="${PAD.l}" y="${PAD.t - 22}" text-anchor="start">· 点位</text>`;
+
+  s += `<line id="cross" x1="0" y1="${PAD.t}" x2="0" y2="${H - PAD.b}" stroke="#12395f" stroke-width="1" stroke-dasharray="3 3" opacity="0"/>`;
+  s += `<circle id="hdot" cx="0" cy="0" r="4.5" fill="#12395f" opacity="0"/>`;
+  s += `<rect id="hit" x="${PAD.l}" y="${PAD.t}" width="${W - PAD.l - PAD.r}" height="${H - PAD.t - PAD.b}" fill="transparent" style="cursor:crosshair"/>`;
+
+  const svg = document.getElementById('chart');
+  svg.innerHTML = s;
+
+  const tip = document.getElementById('tip');
+  const cross = svg.querySelector('#cross');
+  const hdot = svg.querySelector('#hdot');
+  const hit = svg.querySelector('#hit');
+
+  function nearest(iF) {
+    let best = ALL[0], bd = Infinity;
+    for (const p of ALL) {
+      const d = Math.abs(p.i - iF);
+      if (d < bd) { bd = d; best = p; }
+    }
+    return best;
+  }
+
+  function eventNear(i) {
+    let best = null, bd = 2.5;
+    for (const ev of EVENTS) {
+      const d = Math.abs(ym2i(ev.d) - i);
+      if (d <= bd) { bd = d; best = ev; }
+    }
+    return best;
+  }
+
+  hit.addEventListener('mousemove', function (e) {
+    const r = svg.getBoundingClientRect();
+    const px = (e.clientX - r.left) / r.width * W;
+    if (px < PAD.l || px > W - PAD.r) { hide(); return; }
+
+    const iF = X0 + (px - PAD.l) / (W - PAD.l - PAD.r) * (X1 - X0);
+    const p = nearest(iF);
+    const x = X(p.i), y = Y(p.v);
+
+    cross.setAttribute('x1', x); cross.setAttribute('x2', x);
+    cross.setAttribute('opacity', '0.55');
+    hdot.setAttribute('cx', x); hdot.setAttribute('cy', y);
+    hdot.setAttribute('opacity', '1');
+
+    const ev = eventNear(p.i);
+    tip.innerHTML =
+      '<b>' + i2ym(p.i) + '</b> · ' + Math.round(p.v) + ' 点' +
+      (ev ? '<span class="ev">◆ ' + ev.t + '</span>' : '');
+    tip.style.opacity = '1';
+
+    const pageX = r.left + x / W * r.width;
+    const pageY = r.top + y / H * r.height;
+    let left = pageX + 16;
+    let top = pageY - 46;
+
+    if (left + tip.offsetWidth > window.innerWidth - 12) {
+      left = pageX - tip.offsetWidth - 16;
+    }
+    if (top < 8) top = 8;
+
+    tip.style.left = left + 'px';
+    tip.style.top = top + 'px';
+  });
+
+  function hide() {
+    cross.setAttribute('opacity', '0');
+    hdot.setAttribute('opacity', '0');
+    tip.style.opacity = '0';
+  }
+
+  hit.addEventListener('mouseleave', hide);
+  window.addEventListener('scroll', hide, { passive: true });
+
+})();
+</script>
+<div id="tip" style="position:fixed; pointer-events:none; background:rgba(18,32,52,.95); color:#fff; padding:8px 12px; border-radius:8px; font-size:12.4px; line-height:1.6; white-space:nowrap; opacity:0; transition:opacity .12s; z-index:99; box-shadow:0 6px 20px rgba(0,0,0,.25);"></div>
+</body>
+</html>

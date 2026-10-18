@@ -6,6 +6,14 @@
 # Python 缓存
 __pycache__/
 *.py[cod]
+# 忽略 Python 虚拟环境
+.venv/
+venv/
+
+
+# 忽略操作系统生成的文件
+.DS_Store
+Thumbs.db
 
 # 本地文件（不想上传的文件）
 cache_bse.json
@@ -13,3 +21,5 @@ stock_local.py
 avg_price_stock.txt
 注意.txt
 ETF_GJD.py
+ETFGJD2.py
+main.py
