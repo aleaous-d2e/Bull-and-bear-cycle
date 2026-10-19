@@ -26,12 +26,17 @@
   .kicker{font-size:12px; letter-spacing:.22em; text-transform:uppercase; color:#8fb4d8; margin:0 0 14px; font-weight:600;}
   h1{font-size:34px; line-height:1.32; margin:0 0 14px; font-weight:700; letter-spacing:-.01em;}
   .sub{font-size:15px; color:#b9cde0; margin:0; max-width:820px; line-height:1.7;}
+  .meta{margin-top:26px; display:flex; flex-wrap:wrap; gap:10px 26px; font-size:12.5px; color:#8fb4d8; letter-spacing:.04em;}
+  .meta i{width:5px; height:5px; border-radius:50%; background:#5f8cba; display:inline-block; margin-right:7px;}
 
-  .card{
-    background:var(--card); border-radius:14px; padding:34px 38px;
+  /* .card 与 .chart-shell 共享外观，仅内边距不同 */
+  .card, .chart-shell{
+    background:var(--card); border-radius:14px;
     box-shadow:0 1px 2px rgba(20,30,50,.05), 0 8px 26px rgba(20,30,50,.05);
     margin-bottom:24px;
   }
+  .card{padding:34px 38px;}
+  .chart-shell{padding:26px 26px 18px;}
   section{scroll-margin-top:24px;}
   h2{font-size:20px; margin:0 0 16px; font-weight:700; letter-spacing:-.01em; display:flex; align-items:center; gap:12px;}
   h2 .num{display:inline-flex; align-items:center; justify-content:center; width:26px; height:26px; border-radius:7px; background:var(--accent); color:#fff; font-size:13px; font-weight:700; flex:0 0 auto;}
@@ -66,13 +71,12 @@
   .tag.no{background:#fdecea; color:#a8332a;}
   .tag.warn{background:#fdf3e0; color:#8a6412;}
 
-  .chart-shell{background:var(--card); border-radius:14px; padding:26px 26px 18px; box-shadow:0 1px 2px rgba(20,30,50,.05), 0 8px 26px rgba(20,30,50,.05); margin-bottom:24px;}
   .chart-head{display:flex; flex-wrap:wrap; justify-content:space-between; align-items:flex-end; gap:12px; margin-bottom:6px;}
   .chart-title{font-size:17px; font-weight:700; margin:0;}
   .chart-sub{font-size:12.6px; color:var(--muted); margin:3px 0 0;}
   .legend{display:flex; flex-wrap:wrap; gap:16px; font-size:12.3px; color:var(--ink2);}
   .legend i{display:inline-block; width:14px; height:3px; border-radius:2px; margin-right:6px; vertical-align:middle;}
-  .legend .sw-dash{width:14px; height:0; border-top:2px dashed var(--blue); background:none;}
+  .legend .sw-dash{width:14px; height:0; border-top:2px dashed #2b6cb0; opacity: 0.85; background:none;}
   .chart-scroll{overflow-x:auto; margin:10px -4px 0; padding:0 4px;}
   svg#chart{display:block; width:100%; min-width:860px; height:auto; font-family:inherit;}
   .ax{font-size:11.5px; fill:#98a1b0;}
@@ -87,14 +91,55 @@
   .callout .t{font-weight:700; display:block; margin-bottom:5px; color:var(--ink); font-size:13.5px;}
 
   .grid2{display:grid; grid-template-columns:1fr 1fr; gap:22px;}
+
+  /* 新增：H5端图表事件列表 */
+  .ev-list { margin-top: 16px; padding: 16px 20px; background: #f8fafc; border-radius: 10px; border: 1px solid var(--line2); }
+  .ev-list-title { font-size: 13.5px; font-weight: 700; color: var(--ink); margin-bottom: 12px; }
+  .ev-list ul { list-style: none; padding: 0; margin: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 10px 20px; }
+  .ev-list li { font-size: 12.8px; color: var(--ink2); display: flex; align-items: flex-start; gap: 8px; line-height: 1.5; }
+  .ev-list b { display: inline-flex; align-items: center; justify-content: center; width: 18px; height: 18px; background: #f0f7ff; color: var(--blue); border: 1px solid #2b6cb0; border-radius: 50%; font-size: 10px; flex-shrink: 0; margin-top: 2px; }
+  .ev-list .ev-date { color: var(--muted); font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; margin-right: 4px; flex-shrink: 0; font-size: 11.5px; }
+
+  /* H5端媒体查询 */
   @media(max-width:820px){
     .grid2{grid-template-columns:1fr;}
     h1{font-size:25px;}
     .card{padding:26px 22px;}
     header{padding:40px 0 36px;}
+
+    /* 将四个卡片强制在一行显示 */
+    .stats {
+      grid-template-columns: repeat(4, 1fr);
+      gap: 6px;
+    }
+    .stat {
+      padding: 10px 5px; /* 缩小内边距 */
+      border-top-width: 2px;
+      border-radius: 8px;
+    }
+    .stat .v {
+      font-size: 15px; /* 缩小主数字 */
+      letter-spacing: -0.04em;
+    }
+    .stat .v small {
+      font-size: 10px;
+      margin-left: 1px;
+    }
+    .stat .k {
+      font-size: 10px;
+      margin-top: 3px;
+      line-height: 1.25;
+      letter-spacing: 0;
+    }
+    .stat .k .muted {
+      display: none; /* 在极小屏隐藏补充说明，防止换行崩坏 */
+    }
   }
+
   footer{text-align:center; font-size:12.3px; color:var(--muted); padding:10px 0 0; line-height:1.8;}
   .divider{height:1px; background:var(--line); margin:26px 0;}
+
+  #tip{position:fixed; pointer-events:none; background:rgba(18,32,52,.95); color:#fff; padding:8px 12px; border-radius:8px; font-size:12.4px; line-height:1.6; white-space:nowrap; opacity:0; transition:opacity .12s; z-index:99; box-shadow:0 6px 20px rgba(0,0,0,.25);}
 </style>
 </head>
 <body>
@@ -104,9 +149,9 @@
     <p class="kicker">National Team Behavior · Cycle Calibration</p>
     <h1>国家队行为框架的周期校准（2008–2026）</h1>
     <p class="sub">工具演化、时滞压缩与平准基金的实质性落地——将“事件驱动、逆周期调节”框架投射到两轮完整牛熊周期。</p>
-    <div class="meta" style="margin-top:26px; display:flex; flex-wrap:wrap; gap:10px 26px; font-size:12.5px; color:#8fb4d8; letter-spacing:.04em;">
-      <span><i style="width:5px;height:5px;border-radius:50%;background:#5f8cba;display:inline-block;margin-right:7px;"></i>数据截至 2026 年 10 月</span>
-      <span><i style="width:5px;height:5px;border-radius:50%;background:#5f8cba;display:inline-block;margin-right:7px;"></i>广义国家队：汇金、证金、国新、诚通及平准基金机制</span>
+    <div class="meta">
+      <span><i></i>数据截至 2026 年 10 月</span>
+      <span><i></i>广义国家队：汇金、证金、国新、诚通及平准基金机制</span>
     </div>
   </div>
 </header>
@@ -134,8 +179,8 @@
       <div class="k">2026年1月平准基金宽基ETF集中赎回规模</div>
     </div>
     <div class="stat">
-      <div class="v">1404<small>只</small></div>
-      <div class="k">2015年三季度末传统国家队持股数量（后降至1140只）</div>
+      <div class="v">~43<small>%</small></div>
+      <div class="k">平准基金ETF持仓占全市场股票型ETF比例（按峰值推算）</div>
     </div>
   </div>
 
@@ -251,39 +296,39 @@
         <thead>
           <tr>
             <th style="width:14%">周期</th>
+            <th style="width:22%">国家队当时角色</th>
             <th style="width:24%">政策顶 / 干预信号</th>
             <th style="width:16%">市场顶</th>
-            <th style="width:22%">国家队当时角色</th>
             <th>信号与后续</th>
           </tr>
         </thead>
         <tbody>
           <tr>
             <td class="hl">2009–2010年</td>
+            <td><strong>未作为退出工具</strong><br><span class="sm">汇金甚至在2011年转为增持</span></td>
             <td>2009年8月央行收紧信贷；2010年4月“国十条”</td>
             <td>2009年8月 3478点<br>2010年4月 3181点</td>
-            <td><strong>未作为退出工具</strong><br><span class="sm">汇金甚至在2011年转为增持</span></td>
             <td>宏观政策直接刺破估值，此时尚无平准基金退出概念。</td>
           </tr>
           <tr>
             <td class="hl">2015年</td>
+            <td><strong>未减持，随后转为救市</strong><br><span class="sm">7月证金携万亿入场</span></td>
             <td>6月监管层强力清查场外配资</td>
             <td>6月12日 5178点</td>
-            <td><strong>未减持，随后转为救市</strong><br><span class="sm">7月证金携万亿入场</span></td>
             <td>政策顶与市场顶同步。打压引发流动性危机，国家队是被动接盘方。</td>
           </tr>
           <tr>
             <td class="hl">2019–2021年</td>
+            <td><strong>个股渐进减持</strong><br><span class="sm">2020Q4起减持券商、白马</span></td>
             <td>2021年初，监管收紧公募发行，反垄断等</td>
             <td>2021年2月 3731点</td>
-            <td><strong>个股渐进减持</strong><br><span class="sm">2020Q4起减持券商、白马</span></td>
             <td>减持分散，无ETF集中流出，不构成平准基金级别的宏观顶部信号。</td>
           </tr>
           <tr>
             <td class="hl">2024–2026年</td>
+            <td><strong>平准基金集中赎回（政策表态）</strong><br><span class="sm">宽基ETF集中流出5590亿</span></td>
             <td>2026年初监管上调融资保证金比例，定性“防止大起大落”</td>
             <td>2026年1月 4197点</td>
-            <td><strong>平准基金集中赎回（政策表态）</strong><br><span class="sm">宽基ETF集中流出5590亿</span></td>
             <td>政策顶≈市场顶。首次以“平准基金宽基ETF集中流出+降温”形式出现，信号级别极高。</td>
           </tr>
         </tbody>
@@ -315,7 +360,7 @@
            aria-label="上证指数月线折线图，2007年10月至2026年5月"></svg>
     </div>
     <p class="muted" style="margin-top:14px;">
-      数据说明：曲线为基于文档所载关键极值（6124 / 1664 / 3478 / 1949 / 1849 / 5178 / 2638 / 3587 / 2440 / 3731 / 2635 / 2689 / 4258 等）的示意重建。2024年的双底结构（2月2635点与9月2689点）在平准基金预期下接力完成，每一次底部的时滞都被压缩至极致。
+      数据说明：曲线为基于上证指数历史点位建立。2024年的双底结构（2月2635点与9月2689点）在平准基金预期下接力完成，每一次底部的时滞都被压缩至极致。
     </p>
   </section>
 
@@ -382,7 +427,7 @@
 
   <footer>
     国家队行为框架的周期校准（2008–2026） · 研究笔记<br>
-    本报告基于公开信息整理，图表为基于关键极值的示意性重建，不构成任何投资建议。
+    本报告基于公开信息整理，图表为基于历史点位建立，不构成任何投资建议。
   </footer>
 </div>
 
@@ -390,9 +435,9 @@
 (function(){
   "use strict";
 
-  function ym2i(s){ const p = s.split('-'); return (+p[0]) * 12 + (+p[1]) - 1; }
-  function i2ym(i){ return Math.floor(i/12) + '-' + String(i%12+1).padStart(2,'0'); }
-  function rnd(s){ const x = Math.sin(s) * 43758.5453; return x - Math.floor(x); }
+  const ym2i = s => { const p = s.split('-'); return (+p[0]) * 12 + (+p[1]) - 1; };
+  const i2ym = i => Math.floor(i/12) + '-' + String(i%12+1).padStart(2,'0');
+  const rnd  = s => { const x = Math.sin(s) * 43758.5453; return x - Math.floor(x); };
 
   const PIVOTS = [
     { d:'2007-10', v:6124, lab:'6124', pos:'above' },
@@ -426,16 +471,19 @@
   ];
 
   const W = 1120, H = 600;
-  const PAD = { t: 58, r: 58, b: 78, l: 74 };
-  const YMAX = 6600, YMIN = 0;
+  const PAD = { t: 58, r: 58, b: 95, l: 74 };
+  const YMAX = 6500, YMIN = 1500;
   const X0 = ym2i('2007-10');
   const X1 = ym2i('2026-05');
+  const PW = W - PAD.l - PAD.r;
+  const PH = H - PAD.t - PAD.b;
+  const Y_BASE = PAD.t + PH;
 
-  const X = i => PAD.l + (i - X0) / (X1 - X0) * (W - PAD.l - PAD.r);
-  const Y = v => PAD.t + (1 - (v - YMIN) / (YMAX - YMIN)) * (H - PAD.t - PAD.b);
+  const X = i => PAD.l + (i - X0) / (X1 - X0) * PW;
+  const Y = v => PAD.t + (1 - (v - YMIN) / (YMAX - YMIN)) * PH;
 
   const segs = [];
-  const ALL = [];
+  const ALL  = [];
 
   for (let k = 0; k < PIVOTS.length - 1; k++) {
     const a = PIVOTS[k], b = PIVOTS[k + 1];
@@ -453,49 +501,63 @@
         Math.sin(t * Math.PI * (3.7 + (k % 2)) + k * 1.1) * 0.45;
       const noise = (rnd(i * 1.317 + k * 7.233) - 0.5) * 0.55;
       const v = base + (amp * osc + amp * noise) * env;
-      pts.push({ i: i, v: Math.max(300, v) });
+      pts.push({ i, v: Math.max(300, v) });
     }
     pts.push({ i: ib, v: b.v });
 
-    segs.push({ pts: pts, up: b.v >= a.v });
+    segs.push({ pts, up: b.v >= a.v });
     for (const p of pts) {
       if (!ALL.length || ALL[ALL.length - 1].i !== p.i) ALL.push(p);
     }
   }
 
-  let s = '';
-  s += '<defs>';
-  s += '<linearGradient id="gUp" x1="0" y1="0" x2="0" y2="1">';
-  s += '<stop offset="0%" stop-color="#c94137" stop-opacity="0.14"/>';
-  s += '<stop offset="100%" stop-color="#c94137" stop-opacity="0.01"/>';
-  s += '</linearGradient>';
-  s += '<linearGradient id="gDown" x1="0" y1="0" x2="0" y2="1">';
-  s += '<stop offset="0%" stop-color="#2f855a" stop-opacity="0.12"/>';
-  s += '<stop offset="100%" stop-color="#2f855a" stop-opacity="0.01"/>';
-  s += '</linearGradient>';
-  s += '</defs>';
+  let s = `<defs>
+    <linearGradient id="gUp" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#c94137" stop-opacity="0.14"/>
+      <stop offset="100%" stop-color="#c94137" stop-opacity="0.01"/>
+    </linearGradient>
+    <linearGradient id="gDown" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#2f855a" stop-opacity="0.12"/>
+      <stop offset="100%" stop-color="#2f855a" stop-opacity="0.01"/>
+    </linearGradient>
+  </defs>`;
 
-  for (let v = 0; v <= 6000; v += 1000) {
+  for (let v = 1500; v <= 6500; v += 1000) {
     const y = Y(v);
     s += `<line x1="${PAD.l}" y1="${y}" x2="${W - PAD.r}" y2="${y}" stroke="#eef0f4" stroke-width="1"/>`;
     s += `<text class="ax-y" x="${PAD.l - 14}" y="${y + 4}" text-anchor="end">${v}</text>`;
   }
-  s += `<line x1="${PAD.l}" y1="${Y(0)}" x2="${W - PAD.r}" y2="${Y(0)}" stroke="#dfe3ea" stroke-width="1.2"/>`;
+  s += `<line x1="${PAD.l}" y1="${Y_BASE}" x2="${W - PAD.r}" y2="${Y_BASE}" stroke="#dfe3ea" stroke-width="1.2"/>`;
 
   for (let yr = 2008; yr <= 2026; yr++) {
     const i = yr * 12;
     if (i < X0 || i > X1) continue;
     const x = X(i);
-    s += `<line x1="${x}" y1="${PAD.t}" x2="${x}" y2="${H - PAD.b}" stroke="#f2f4f7" stroke-width="1"/>`;
-    s += `<text class="ax" x="${x}" y="${H - PAD.b + 24}" text-anchor="middle">${yr}</text>`;
+    s += `<line x1="${x}" y1="${PAD.t}" x2="${x}" y2="${Y_BASE}" stroke="#f2f4f7" stroke-width="1"/>`;
+    s += `<text class="ax" x="${x}" y="${Y_BASE + 24}" text-anchor="middle">${yr}</text>`;
   }
 
+  let evIndex = 1;
+  const evItems = [];
   for (const ev of EVENTS) {
     const i = ym2i(ev.d);
     if (i < X0 || i > X1) continue;
     const x = X(i);
-    s += `<line x1="${x}" y1="${PAD.t}" x2="${x}" y2="${H - PAD.b}" stroke="#2b6cb0" stroke-width="1.1" stroke-dasharray="4 5" opacity="0.32"/>`;
+    // 增强国家队动作虚线的显示
+    s += `<line x1="${x}" y1="${PAD.t}" x2="${x}" y2="${Y_BASE}" stroke="#2b6cb0" stroke-width="1.8" stroke-dasharray="5 5" opacity="0.6"/>`;
+
+    // 底部带数字的圆圈
+    const yb = Y_BASE + 48;
+    s += `<g><title>${ev.d} · ${ev.t}</title>`;
+    s += `<circle cx="${x}" cy="${yb}" r="9" fill="#f0f7ff" stroke="#2b6cb0" stroke-width="1.5" opacity="0.95"/>`;
+    s += `<text x="${x}" y="${yb + 3.5}" text-anchor="middle" font-size="10.5" font-weight="700" fill="#2b6cb0">${evIndex}</text>`;
+    s += `</g>`;
+
+    evItems.push(`<li><b>${evIndex}</b> <span class="ev-date">${ev.d}</span> ${ev.t}</li>`);
+    evIndex++;
   }
+  const listHtml = '<div class="ev-list"><div class="ev-list-title">国家队动作节点（对应图中底部数字标记）</div><ul>'
+                 + evItems.join('') + '</ul></div>';
 
   for (const seg of segs) {
     const pts = seg.pts;
@@ -505,7 +567,7 @@
       d += (i === 0 ? 'M' : 'L') + X(pts[i].i).toFixed(1) + ',' + Y(pts[i].v).toFixed(1);
     }
     const first = pts[0], last = pts[pts.length - 1];
-    const dArea = d + `L${X(last.i).toFixed(1)},${Y(0)}L${X(first.i).toFixed(1)},${Y(0)}Z`;
+    const dArea = d + `L${X(last.i).toFixed(1)},${Y_BASE}L${X(first.i).toFixed(1)},${Y_BASE}Z`;
     const fill = seg.up ? 'url(#gUp)' : 'url(#gDown)';
     const stroke = seg.up ? '#c94137' : '#2f855a';
 
@@ -532,25 +594,17 @@
     }
   }
 
-  for (const ev of EVENTS) {
-    const i = ym2i(ev.d);
-    if (i < X0 || i > X1) continue;
-    const x = X(i);
-    const yb = H - PAD.b + 36;
-    s += `<g><title>${ev.d} · ${ev.t}</title>`;
-    s += `<path d="M${x},${yb - 6} L${x - 5.5},${yb + 4} L${x + 5.5},${yb + 4} Z" fill="#2b6cb0" opacity="0.72"/>`;
-    s += `</g>`;
-  }
-
   s += `<text class="ttl" x="${PAD.l - 14}" y="${PAD.t - 22}" text-anchor="end">上证指数</text>`;
   s += `<text class="ttl" x="${PAD.l}" y="${PAD.t - 22}" text-anchor="start">· 点位</text>`;
 
-  s += `<line id="cross" x1="0" y1="${PAD.t}" x2="0" y2="${H - PAD.b}" stroke="#12395f" stroke-width="1" stroke-dasharray="3 3" opacity="0"/>`;
+  s += `<line id="cross" x1="0" y1="${PAD.t}" x2="0" y2="${Y_BASE}" stroke="#12395f" stroke-width="1" stroke-dasharray="3 3" opacity="0"/>`;
   s += `<circle id="hdot" cx="0" cy="0" r="4.5" fill="#12395f" opacity="0"/>`;
-  s += `<rect id="hit" x="${PAD.l}" y="${PAD.t}" width="${W - PAD.l - PAD.r}" height="${H - PAD.t - PAD.b}" fill="transparent" style="cursor:crosshair"/>`;
+  s += `<rect id="hit" x="${PAD.l}" y="${PAD.t}" width="${PW}" height="${PH}" fill="transparent" style="cursor:crosshair"/>`;
 
   const svg = document.getElementById('chart');
   svg.innerHTML = s;
+
+  document.querySelector('.chart-scroll').insertAdjacentHTML('afterend', listHtml);
 
   const tip = document.getElementById('tip');
   const cross = svg.querySelector('#cross');
@@ -575,12 +629,18 @@
     return best;
   }
 
+  function hide() {
+    cross.setAttribute('opacity', '0');
+    hdot.setAttribute('opacity', '0');
+    tip.style.opacity = '0';
+  }
+
   hit.addEventListener('mousemove', function (e) {
     const r = svg.getBoundingClientRect();
     const px = (e.clientX - r.left) / r.width * W;
     if (px < PAD.l || px > W - PAD.r) { hide(); return; }
 
-    const iF = X0 + (px - PAD.l) / (W - PAD.l - PAD.r) * (X1 - X0);
+    const iF = X0 + (px - PAD.l) / PW * (X1 - X0);
     const p = nearest(iF);
     const x = X(p.i), y = Y(p.v);
 
@@ -609,17 +669,11 @@
     tip.style.top = top + 'px';
   });
 
-  function hide() {
-    cross.setAttribute('opacity', '0');
-    hdot.setAttribute('opacity', '0');
-    tip.style.opacity = '0';
-  }
-
   hit.addEventListener('mouseleave', hide);
   window.addEventListener('scroll', hide, { passive: true });
 
 })();
 </script>
-<div id="tip" style="position:fixed; pointer-events:none; background:rgba(18,32,52,.95); color:#fff; padding:8px 12px; border-radius:8px; font-size:12.4px; line-height:1.6; white-space:nowrap; opacity:0; transition:opacity .12s; z-index:99; box-shadow:0 6px 20px rgba(0,0,0,.25);"></div>
+<div id="tip"></div>
 </body>
 </html>

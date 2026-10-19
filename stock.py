@@ -23,6 +23,7 @@ import time
 import datetime
 import requests
 import pandas as pd
+import akshare as ak
 from zzshare.client import DataApi
 
 # ==================== 配置 ====================
@@ -42,39 +43,36 @@ BSE_HEADERS = {
 
 api = DataApi(token=ZZSHARE_TOKEN) if ZZSHARE_TOKEN else DataApi()
 
+# ==================== 交易日历（AkShare 新浪交易日历） ====================
+_TRADE_DATES = None
 
-# ==================== 交易日历 ====================
+
+def _load_trade_dates():
+    """全量日历，进程内只请求一次。"""
+    global _TRADE_DATES
+    if _TRADE_DATES is None:
+        df = ak.tool_trade_date_hist_sina()
+        _TRADE_DATES = pd.to_datetime(df["trade_date"]).sort_values().reset_index(drop=True)
+    return _TRADE_DATES
+
+
 def get_trade_dates(start_date, end_date):
-    """用上证指数日线拿真实交易日列表"""
-    start_compact = start_date.replace("-", "")
-    end_compact = end_date.replace("-", "")
-    for code in ["000001.SH", "sh000001", "000001"]:
-        try:
-            df = api.daily(ts_code=code,
-                           start_date=start_compact,
-                           end_date=end_compact)
-            if df is not None and not df.empty and "trade_date" in df.columns:
-                dates = sorted(df["trade_date"].astype(str).unique())
-                return [f"{d[:4]}-{d[4:6]}-{d[6:]}" for d in dates]
-        except Exception:
-            continue
-    print("[警告] 无法获取交易日历，退回简单工作日")
-    return [d.strftime("%Y-%m-%d")
-            for d in pd.bdate_range(start=start_date, end=end_date)]
+    """返回区间内的真实交易日列表"""
+    dates = _load_trade_dates()
+    s, e = pd.Timestamp(start_date), pd.Timestamp(end_date)
+    return dates[(dates >= s) & (dates <= e)].dt.strftime("%Y-%m-%d").tolist()
 
 
 def is_trade_date(date_str):
     """判断某日是否交易日"""
-    return date_str in get_trade_dates(date_str, date_str)
+    return pd.Timestamp(date_str) in _load_trade_dates().values
 
 
 def get_prev_trade_date():
     """返回上一个交易日（调用前应已确认今天是交易日）"""
-    today = datetime.date.today()
-    start = (today - datetime.timedelta(days=15)).strftime("%Y-%m-%d")
-    end = (today - datetime.timedelta(days=1)).strftime("%Y-%m-%d")
-    dates = get_trade_dates(start, end)
-    return dates[-1] if dates else None
+    dates = _load_trade_dates()
+    today = pd.Timestamp.today().normalize()
+    return dates[dates < today].max().strftime("%Y-%m-%d")
 
 
 # ==================== 北交所：只取目标日期总市值 ====================
@@ -84,23 +82,18 @@ def get_bse_mv(trade_date):
 
     for i in range(BSE_RETRY_TIMES):
         try:
-            r = requests.post(BSE_URL, data={"date": ""},
-                              headers=BSE_HEADERS, timeout=30)
+            r = requests.post(BSE_URL, data={"date": ""}, headers=BSE_HEADERS, timeout=30)
             m = re.search(r"null\((\[.*\])\)", r.text, re.DOTALL)
             if not m:
                 raise ValueError("返回格式异常")
 
-            data = json.loads(m.group(1))
-            for item in data:
-                if item.get("xxzrlx") != "2":
-                    continue
-                if str(item.get("rq", "")) != target_compact:
-                    continue
-                if "zsz" not in item:
-                    continue
-                mv = float(item["zsz"]) / 1e8
-                print(f"[北交所] {trade_date} 总市值 {mv:.4f} 亿")
-                return mv
+            for item in json.loads(m.group(1)):
+                if (item.get("xxzrlx") == "2"
+                        and str(item.get("rq", "")) == target_compact
+                        and "zsz" in item):
+                    mv = float(item["zsz"]) / 1e8
+                    print(f"[北交所] {trade_date} 总市值 {mv:.4f} 亿")
+                    return mv
 
             print(f"[北交所] 未找到 {trade_date} 的数据")
             return None
@@ -125,11 +118,8 @@ def get_ashare_total_mv(date_str, retries=2):
                 return None, None, None, 0
 
             code = df["code"].astype(str)
-            sse_mask = code.str.endswith((".SH", ".KSH"))
-            szse_mask = code.str.endswith((".SZ", ".GEM"))
-
-            sse_mv = float(df.loc[sse_mask, "market_cap"].sum())
-            szse_mv = float(df.loc[szse_mask, "market_cap"].sum())
+            sse_mv = float(df.loc[code.str.endswith((".SH", ".KSH")), "market_cap"].sum())
+            szse_mv = float(df.loc[code.str.endswith((".SZ", ".GEM")), "market_cap"].sum())
             total = float(df["market_cap"].sum())
 
             return total, sse_mv, szse_mv, len(df)
@@ -146,9 +136,8 @@ def get_ashare_total_mv(date_str, retries=2):
 # ==================== 平均股价：单日平均收盘价 ====================
 def get_avg_close(trade_date):
     """获取指定交易日全市场平均收盘价（close > 0 且 vol > 0）"""
-    date_compact = trade_date.replace("-", "")
     try:
-        df = api.daily(trade_date=date_compact, offset=0, limit=6000)
+        df = api.daily(trade_date=trade_date.replace("-", ""), offset=0, limit=6000)
     except Exception as e:
         print(f"  [平均股价] 获取失败: {e}")
         return None
@@ -156,17 +145,13 @@ def get_avg_close(trade_date):
     if df is None or len(df) == 0:
         return None
 
-    need = ["close", "vol"]
-    missing = [c for c in need if c not in df.columns]
+    missing = [c for c in ("close", "vol") if c not in df.columns]
     if missing:
         print(f"  [平均股价] 缺字段: {missing}")
         return None
 
     traded = df[(df["close"] > 0) & (df["vol"] > 0)]
-    if len(traded) == 0:
-        return None
-
-    return float(traded["close"].mean())
+    return float(traded["close"].mean()) if len(traded) else None
 
 
 # ==================== market_data.js 读写 ====================
@@ -188,12 +173,10 @@ def load_market_data():
 
 def save_market_data(data):
     # 按日期降序（最新在前）
-    if isinstance(data.get("ashare"), dict):
-        data["ashare"] = dict(sorted(data["ashare"].items(),
+    for key in ("ashare", "bse"):
+        if isinstance(data.get(key), dict):
+            data[key] = dict(sorted(data[key].items(),
                                      key=lambda kv: kv[0], reverse=True))
-    if isinstance(data.get("bse"), dict):
-        data["bse"] = dict(sorted(data["bse"].items(),
-                                  key=lambda kv: kv[0], reverse=True))
 
     out = "window.MARKET_DATA = " + json.dumps(
         data, ensure_ascii=False, separators=(",", ":")) + ";"
@@ -224,7 +207,7 @@ def run_once():
 
     # ---------- 读取现有数据并计算需要补齐的真实交易日 ----------
     data = load_market_data()
-    existing_dates = list(data.get("ashare", {}).keys())
+    existing_dates = list(data.get("ashare", {}))
 
     # 无论是否补缺，T-1当天必须是最新的
     dates_to_fetch = {target_date}
@@ -235,13 +218,12 @@ def run_once():
         if latest_date < target_date:
             print(f"[检查] 库中最新为 {latest_date}，落后于 T-1 ({target_date})，准备补全中间缺失的交易日")
             # 获取两个日期之间的所有真实交易日
-            missing_trade_dates = get_trade_dates(latest_date, target_date)
-            for d in missing_trade_dates:
-                # 只有当前库里没这天的数据（即真正缺失了），才加入抓取队列
-                if d not in existing_dates:
-                    dates_to_fetch.add(d)
+            dates_to_fetch.update(
+                d for d in get_trade_dates(latest_date, target_date)
+                if d not in existing_dates
+            )
 
-    dates_to_fetch = sorted(list(dates_to_fetch))
+    dates_to_fetch = sorted(dates_to_fetch)
     print(f"[执行] 本次需要抓取的交易日列表: {dates_to_fetch}")
 
     # 遍历执行抓取（通常只有1天，只有在断档恢复时才会有多天）
@@ -258,10 +240,8 @@ def run_once():
 
         # ---------- 平均股价 ----------
         avg_close = get_avg_close(date_str)
-        if avg_close is not None:
-            print(f"[平均股价] 平均收盘价 {avg_close:.4f} 元")
-        else:
-            print("[平均股价] 无数据")
+        print(f"[平均股价] 平均收盘价 {avg_close:.4f} 元" if avg_close is not None
+              else "[平均股价] 无数据")
 
         # ---------- 【严格校验】如果核心数据抓不到，立刻报错，防止脏数据覆盖 ----------
         if ashare_total is None or ashare_total <= 0:
@@ -271,20 +251,15 @@ def run_once():
 
         # ---------- 组装记录 ----------
         record = {
-            "ashare_total": round(ashare_total, 4) if ashare_total is not None else None,
+            "ashare_total": round(ashare_total, 4),
             "sse_mv": round(sse_mv, 4) if sse_mv is not None else None,
             "szse_mv": round(szse_mv, 4) if szse_mv is not None else None,
             "cnt": cnt,
         }
 
         # 只取平均收盘价，open/high/low/close/price 统一写该值
-        if avg_close is not None:
-            v = round(avg_close, 4)
-            record["price"] = v
-            record["open"] = v
-            record["high"] = v
-            record["low"] = v
-            record["close"] = v
+        v = round(avg_close, 4)
+        record.update(price=v, open=v, high=v, low=v, close=v)
 
         # ---------- 合并进内存数据 ----------
         data.setdefault("ashare", {})[date_str] = record
@@ -293,8 +268,7 @@ def run_once():
 
         b_str = f"{bse_mv:.2f}" if bse_mv is not None else "None"
         t_str = (f"{ashare_total + bse_mv:.2f}"
-                 if (ashare_total is not None and bse_mv is not None)
-                 else (f"{ashare_total:.2f}" if ashare_total is not None else "None"))
+                 if bse_mv is not None else f"{ashare_total:.2f}")
         print(f"[{date_str}] 沪深 {a_str} | 北交所 {b_str} | 合计 {t_str}")
 
     # ---------- 统一写入文件 ----------
@@ -324,25 +298,3 @@ def main():
 if __name__ == "__main__":
     main()
 
-# ==================== 定时任务（默认不开启，需要时取消注释） ====================
-# 依赖: pip install schedule
-# 说明: 每天早上 08:00 触发；run_once 内部第一步就判断今天是否交易日，
-#       非交易日（周末 / 节假日）会立即结束，不做任何文件读写。
-#
-# import schedule
-#
-# def scheduled_job():
-#     print(f"\n[{datetime.datetime.now()}] 定时任务触发")
-#     try:
-#         run_once()
-#     except Exception as e:
-#         print(f"定时任务执行失败: {e}")
-#
-# schedule.every().day.at("08:00").do(scheduled_job)
-#
-# if __name__ == "__main__":
-#     print("定时任务已启动，每天 08:00 检查一次（非交易日自动结束）")
-#     schedule.run_pending()  # 立即检查一次
-#     while True:
-#         schedule.run_pending()
-#         time.sleep(30)

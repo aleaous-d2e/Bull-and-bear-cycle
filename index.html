@@ -89,7 +89,7 @@
 
   /* ★ 平均股价月线图：整体宽度固定 1080px，
        卡片左右内边距归零，让图表的实际宽度正好等于 1080px */
-  .chart-price-card { padding-left: 0; padding-right: 0; }
+  .chart-price-card { padding: 8px 0 0; }
   .chart-price-card #chart-price { width: 1080px; max-width: 100%; margin: 0 auto; }
   .chart-price-card .chart-toolbar { padding-left: 8px; padding-right: 8px; }
 
@@ -143,15 +143,11 @@
   }
   th {
     background: #f9fafb; color: #6b7280; font-weight: 500;
-    font-size: 12px; text-transform: uppercase;
+    font-size: 11px; text-transform: uppercase;
   }
   /* 清除之前的首尾特殊对齐，让所有列保持高度一致的居中 */
   th:first-child, td:first-child { text-align: center; padding-left: 12px; }
   th:last-child, td:last-child { text-align: center; padding-right: 12px; }
-  th {
-    background: #f9fafb; color: #6b7280; font-weight: 500;
-    font-size: 11px; text-transform: uppercase;
-  }
   tbody tr:hover { background: #f9fafb; }
   td.num { font-variant-numeric: tabular-nums; }
 
@@ -195,7 +191,8 @@
     .table-wrap { max-width: 100%; border-radius: 6px; }
     table { font-size: 10px; min-width: 0; width: 100%; }
     th, td { padding: 6px 3px; }
-    th { font-size: 9px; padding: 6px 3px; }
+    th { font-size: 9px; letter-spacing: 0; }
+    /* ★ 关键：给首列“日期”和尾列“操作建议”加上左右安全边距，防止贴边 */
     th:first-child, td:first-child { padding-left: 8px; }
     th:last-child, td:last-child { padding-right: 8px; }
 
@@ -219,15 +216,6 @@
 
     .note-bar { padding: 10px 12px; font-size: 11px; margin-bottom: 8px; }
     .bse-note { display: none; }
-
-     .table-card { padding: 2px 6px 6px; }
-    .table-wrap { border-radius: 6px; }
-    table { font-size: 10px; min-width: 0; width: 100%; }
-    th, td { padding: 6px 3px; }
-    th { font-size: 9px; letter-spacing: 0; padding: 6px 3px; }
-    /* ★ 关键：给首列“日期”和尾列“操作建议”加上左右安全边距，防止贴边 */
-    th:first-child, td:first-child { padding-left: 8px; }
-    th:last-child, td:last-child { padding-right: 8px; }
 
     footer { font-size: 10px; margin-top: 12px; padding: 6px; }
   }
@@ -332,6 +320,16 @@
 </div>
 
 <script>
+/* ============================================================
+   0. 小工具
+   ============================================================ */
+const $ = id => document.getElementById(id);
+
+function setDelta(el, text, pct) {
+  el.textContent = text + (pct >= 0 ? '+' : '') + pct.toFixed(2) + '%';
+  el.className = 'kpi-delta ' + (pct > 0 ? 'up' : pct < 0 ? 'down' : 'flat');
+}
+
 /* ============================================================
    1. GDP 年度数据（亿元）
    ============================================================ */
@@ -511,18 +509,13 @@ function aggregateSeries(daily, gran) {
 let chart = null;
 let seriesIndex = new Map();
 let dailySeries = [];
-let weeklySeries = null;
-let monthlySeries = null;
+const seriesCache = { week: null, month: null };
 let currentGran = 'day';
 
 let priceChart = null;
-const currentPriceGran = 'month';   // 仅月线
+let priceAgg = null;
 
-let showTrendHigh = true;
-let showTrendLow  = true;
-let showTrendMix  = true;
-
-const priceAggCache = { month: null };
+const trendVisible = { high: true, low: true, mix: true };
 
 const TREND_NAME = {
   high: '高位风险',
@@ -530,17 +523,19 @@ const TREND_NAME = {
   mix:  '低估定投'
 };
 
+/* 按终端与粒度设置默认展示区间（单位：月） */
+const RANGE_MONTHS = {
+  day:   { mobile: 1,  desktop: 6  },
+  week:  { mobile: 6,  desktop: 24 },
+  month: { mobile: 24, desktop: 36 }
+};
+
 function getDisplaySeries() {
   if (currentGran === 'day') return dailySeries;
-  if (currentGran === 'week') {
-    if (!weeklySeries) weeklySeries = aggregateSeries(dailySeries, 'week');
-    return weeklySeries;
+  if (!seriesCache[currentGran]) {
+    seriesCache[currentGran] = aggregateSeries(dailySeries, currentGran);
   }
-  if (currentGran === 'month') {
-    if (!monthlySeries) monthlySeries = aggregateSeries(dailySeries, 'month');
-    return monthlySeries;
-  }
-  return dailySeries;
+  return seriesCache[currentGran];
 }
 
 /* ============================================================
@@ -550,31 +545,25 @@ function renderKPI() {
   const last = dailySeries[dailySeries.length - 1];
   const prev = dailySeries[dailySeries.length - 2] || last;
 
-  document.getElementById('kpi-mv-date').textContent = 'T-1日：' + last.date;
-  document.getElementById('kpi-mv').innerHTML =
-    (last.mv / 10000).toFixed(2) + '<small>万亿</small>';
+  $('kpi-mv-date').textContent = 'T-1日：' + last.date;
+  $('kpi-mv').innerHTML = (last.mv / 10000).toFixed(2) + '<small>万亿</small>';
 
   const chg = (last.mv / prev.mv - 1) * 100;
-  const el = document.getElementById('kpi-mv-d');
-  el.textContent = '较T-2日 ' + (chg >= 0 ? '+' : '') + chg.toFixed(2) + '%';
-  el.className = 'kpi-delta ' + (chg > 0 ? 'up' : chg < 0 ? 'down' : 'flat');
+  setDelta($('kpi-mv-d'), '较T-2日 ', chg);
 
   const yearNow = GDP_LATEST_YEAR;
   const yearBase = yearNow - 1;
 
-  document.getElementById('kpi-gdp-label').textContent = 'GDP（' + yearNow + '）';
+  $('kpi-gdp-label').textContent = 'GDP（' + yearNow + '）';
 
   const gdpVal = GDP_ANNUAL[yearNow];
-  document.getElementById('kpi-gdp').innerHTML =
-    (gdpVal / 10000).toFixed(2) + '<small>万亿</small>';
+  $('kpi-gdp').innerHTML = (gdpVal / 10000).toFixed(2) + '<small>万亿</small>';
 
-  const yoyEl = document.getElementById('kpi-gdp-yoy');
+  const yoyEl = $('kpi-gdp-yoy');
   const gdpBase = GDP_ANNUAL[yearBase];
   if (gdpBase) {
     const yoy = (gdpVal / gdpBase - 1) * 100;
-    yoyEl.textContent = '同比 ' + yearBase + '年 '
-      + (yoy >= 0 ? '+' : '') + yoy.toFixed(2) + '%';
-    yoyEl.className = 'kpi-delta ' + (yoy > 0 ? 'up' : yoy < 0 ? 'down' : 'flat');
+    setDelta(yoyEl, '同比 ' + yearBase + '年 ', yoy);
   } else {
     yoyEl.textContent = '—';
     yoyEl.className = 'kpi-delta flat';
@@ -585,21 +574,20 @@ function renderKPI() {
   const yearLabel = GDP_CURRENT.isEstimate
     ? GDP_CURRENT.year + 'E'
     : GDP_CURRENT.year + '年';
-  document.getElementById('kpi-ratio-label').textContent =
-    '市值 / GDP（' + yearLabel + '）';
+  $('kpi-ratio-label').textContent = '市值 / GDP（' + yearLabel + '）';
 
-  document.getElementById('kpi-ratio').textContent = last.ratio.toFixed(3);
+  $('kpi-ratio').textContent = last.ratio.toFixed(3);
   const v = valuation(last.ratio);
 
   // 卡片内只显示估值结论
-  const rd = document.getElementById('kpi-ratio-d');
+  const rd = $('kpi-ratio-d');
   rd.textContent = v.level + ' · ' + v.action;
 
   const isRisk = (v.level === '疯狂' || v.level === '危险' || v.level === '偏高');
   rd.className = 'kpi-delta ' + (isRisk ? 'up' : 'down');
 
   /* ---------- GDP 信息写进 note-bar ---------- */
-  const gdpNoteEl = document.getElementById('gdp-note');
+  const gdpNoteEl = $('gdp-note');
   if (gdpNoteEl) {
     const gdpGrowthPct = (GDP_CURRENT.growth != null)
       ? (GDP_CURRENT.growth * 100).toFixed(2)
@@ -633,36 +621,45 @@ function shiftMonths(dateStr, months) {
 /* ============================================================
    6. 主图（市值/GDP + 平均股价）
    ============================================================ */
+// 估值分界线（0.890 危险 / 0.799 偏高 / 0.590 低估）
+const VALUATION_MARKS = [
+  { y: 0.890, label: '0.890 危险', color: '#f97316' },
+  { y: 0.799, label: '0.799 偏高', color: '#eab308' },
+  { y: 0.590, label: '0.590 低估', color: '#3b82f6' }
+].map(m => ({
+  yAxis: m.y,
+  lineStyle: { color: m.color, type: 'dashed', width: 1 },
+  label: { formatter: m.label, color: m.color }
+}));
+
+function buildDataZoom(range, isMobile, bottom) {
+  const base = {
+    height: isMobile ? 14 : 18,
+    bottom: bottom,
+    borderColor: '#e5e7eb',
+    fillerColor: 'rgba(37,99,235,.08)',
+    handleStyle: { color: '#2563eb' },
+    textStyle: { fontSize: isMobile ? 9 : 11 }
+  };
+  return [
+    Object.assign({ type: 'inside' }, range),
+    Object.assign({ type: 'slider' }, base, range)
+  ];
+}
+
 function renderChart() {
   const series = getDisplaySeries();
   seriesIndex = new Map(series.map(s => [s.date, s]));
 
   const isMobile = window.innerWidth <= 720;
-
-  const totalCount = series.length;
-  const endDate = series[totalCount - 1].date;
-
-  // 按终端与粒度设置默认展示区间（单位：月）
-  let rangeMonths;
-  if (isMobile) {
-    if (currentGran === 'day')       rangeMonths = 1;   // H5 日线：近 1 个月
-    else if (currentGran === 'week') rangeMonths = 6;   // H5 周线：近半年
-    else                             rangeMonths = 24;  // H5 月线：近 2 年
-  } else {
-    if (currentGran === 'day')       rangeMonths = 6;   // Web 日线：近半年
-    else if (currentGran === 'week') rangeMonths = 24;  // Web 周线：近 2 年
-    else                             rangeMonths = 36;  // Web 月线：保持近 3 年
-  }
+  const endDate = series[series.length - 1].date;
+  const rangeMonths = RANGE_MONTHS[currentGran][isMobile ? 'mobile' : 'desktop'];
 
   const targetDateStr = shiftMonths(endDate, rangeMonths);
+  const startIndex = Math.max(0, series.findIndex(s => s.date >= targetDateStr));
+  const startPercent = (startIndex / series.length) * 100;
 
-  let startIndex = 0;
-  for (let i = 0; i < series.length; i++) {
-    if (series[i].date >= targetDateStr) { startIndex = i; break; }
-  }
-  const startPercent = Math.max(0, (startIndex / totalCount) * 100);
-
-  if (!chart) chart = echarts.init(document.getElementById('chart-main'));
+  if (!chart) chart = echarts.init($('chart-main'));
 
   chart.setOption({
     // ★ 缩小了主图的左右宽距（Web端由 100 改为 60）
@@ -733,19 +730,7 @@ function renderChart() {
       }
     ],
 
-    dataZoom: [
-      { type: 'inside', start: startPercent, end: 100 },
-      {
-        type: 'slider',
-        height: isMobile ? 14 : 18,
-        bottom: isMobile ? 4 : 12,
-        start: startPercent, end: 100,
-        borderColor: '#e5e7eb',
-        fillerColor: 'rgba(37,99,235,.08)',
-        handleStyle: { color: '#2563eb' },
-        textStyle: { fontSize: isMobile ? 9 : 11 }
-      }
-    ],
+    dataZoom: buildDataZoom({ start: startPercent, end: 100 }, isMobile, isMobile ? 4 : 12),
 
     series: [
       {
@@ -763,17 +748,7 @@ function renderChart() {
         markLine: {
           silent: true, symbol: 'none',
           label: { position: 'insideEndTop', fontSize: isMobile ? 9 : 11 },
-          data: [
-            { yAxis: 0.890,
-              lineStyle: { color: '#f97316', type: 'dashed', width: 1 },
-              label: { formatter: '0.890 危险', color: '#f97316' } },
-            { yAxis: 0.799,
-              lineStyle: { color: '#eab308', type: 'dashed', width: 1 },
-              label: { formatter: '0.799 偏高', color: '#eab308' } },
-            { yAxis: 0.590,
-              lineStyle: { color: '#3b82f6', type: 'dashed', width: 1 },
-              label: { formatter: '0.590 低估', color: '#3b82f6' } }
-          ]
+          data: VALUATION_MARKS
         }
       },
       {
@@ -831,8 +806,8 @@ function aggregateOHLC(daily, gran) {
 }
 
 /* ---------- 趋势线关键锚点（可自由修改） ---------- */
-const TREND_HIGH_KEYS = ['2008-02', '2015-12', '2021-12'];
-const TREND_LOW_KEYS  = ['2008-11', '2019-01', '2024-02'];
+const TREND_HIGH_KEYS = ['2008-02', '2015-12', '2021-12'].map(key => ({ key, pick: 'high' }));
+const TREND_LOW_KEYS  = ['2008-11', '2019-01', '2024-02'].map(key => ({ key, pick: 'low'  }));
 const TREND_MIX_KEYS  = [
   { key: '2005-09', pick: 'high' },
   { key: '2012-12', pick: 'low'  }
@@ -875,40 +850,39 @@ function buildExtendedTrend(agg, anchors) {
   return out;
 }
 
-function buildHighTrend(agg) {
-  return buildExtendedTrend(agg, TREND_HIGH_KEYS.map(k => ({ key: k, pick: 'high' })));
-}
-function buildLowTrend(agg) {
-  return buildExtendedTrend(agg, TREND_LOW_KEYS.map(k => ({ key: k, pick: 'low' })));
-}
-function buildMixTrend(agg) {
-  return buildExtendedTrend(agg, TREND_MIX_KEYS);
+/* 三条趋势线的 series 结构完全一致，统一构造 */
+function trendSeries(name, data, color, dashed) {
+  const lineStyle = { color: color, width: 1.8 };
+  if (dashed) lineStyle.type = 'dashed';
+  return {
+    name: name, type: 'line', data: data,
+    connectNulls: true, symbol: 'none', showSymbol: false, smooth: false,
+    lineStyle: lineStyle, z: 5
+  };
 }
 
 function renderPriceChart() {
   if (!dailySeries.length) return;
 
-  const gran = 'month';
-  if (!priceAggCache[gran]) priceAggCache[gran] = aggregateOHLC(dailySeries, gran);
-  const agg = priceAggCache[gran];
+  if (!priceAgg) priceAgg = aggregateOHLC(dailySeries, 'month');
+  const agg = priceAgg;
   if (!agg.length) return;
 
   const isMobile = window.innerWidth <= 720;
 
   const ohlc = agg.map(g => [g.open, g.close, g.low, g.high]);
 
-  let trendHigh = null, trendLow = null, trendMix = null;
-  if (showTrendHigh) trendHigh = buildHighTrend(agg);
-  if (showTrendLow)  trendLow  = buildLowTrend(agg);
-  if (showTrendMix)  trendMix  = buildMixTrend(agg);
+  const trendHigh = trendVisible.high ? buildExtendedTrend(agg, TREND_HIGH_KEYS) : null;
+  const trendLow  = trendVisible.low  ? buildExtendedTrend(agg, TREND_LOW_KEYS)  : null;
+  const trendMix  = trendVisible.mix  ? buildExtendedTrend(agg, TREND_MIX_KEYS)  : null;
 
-  const total   = agg.length;
+  const total = agg.length;
   /* ★ 平均股价月线图：Web 默认展示最近 72 根 K 线，H5 默认展示最近 60 根 K 线，
        这 60/72 根 K 线整体铺满 1080px 宽度（宽度由 .chart-price-card #chart-price 控制） */
-  const visible = isMobile ? Math.min(60, total) : Math.min(72, total);
+  const visible = Math.min(isMobile ? 60 : 72, total);
   const startIndex = Math.max(0, total - visible);
 
-  if (!priceChart) priceChart = echarts.init(document.getElementById('chart-price'));
+  if (!priceChart) priceChart = echarts.init($('chart-price'));
 
   const seriesArr = [
     {
@@ -925,39 +899,9 @@ function renderPriceChart() {
     }
   ];
 
-  if (trendHigh) seriesArr.push({
-    name: TREND_NAME.high,
-    type: 'line',
-    data: trendHigh,
-    connectNulls: true,
-    symbol: 'none',
-    showSymbol: false,
-    smooth: false,
-    lineStyle: { color: '#dc2626', width: 1.8 },
-    z: 5
-  });
-  if (trendLow) seriesArr.push({
-    name: TREND_NAME.low,
-    type: 'line',
-    data: trendLow,
-    connectNulls: true,
-    symbol: 'none',
-    showSymbol: false,
-    smooth: false,
-    lineStyle: { color: '#2563eb', width: 1.8 },
-    z: 5
-  });
-  if (trendMix) seriesArr.push({
-    name: TREND_NAME.mix,
-    type: 'line',
-    data: trendMix,
-    connectNulls: true,
-    symbol: 'none',
-    showSymbol: false,
-    smooth: false,
-    lineStyle: { color: '#8b5cf6', width: 1.8, type: 'dashed' },
-    z: 5
-  });
+  if (trendHigh) seriesArr.push(trendSeries(TREND_NAME.high, trendHigh, '#dc2626'));
+  if (trendLow)  seriesArr.push(trendSeries(TREND_NAME.low,  trendLow,  '#2563eb'));
+  if (trendMix)  seriesArr.push(trendSeries(TREND_NAME.mix,  trendMix,  '#8b5cf6', true));
 
   priceChart.setOption({
     legend: { show: false },
@@ -1017,20 +961,11 @@ function renderPriceChart() {
       axisLabel: { color: '#6b7280', fontSize: isMobile ? 10 : 11 }
     },
 
-    dataZoom: [
-      { type: 'inside', startValue: startIndex, endValue: total - 1 },
-      {
-        type: 'slider',
-        height: isMobile ? 14 : 18,
-        bottom: isMobile ? 4 : 10,
-        startValue: startIndex,
-        endValue: total - 1,
-        borderColor: '#e5e7eb',
-        fillerColor: 'rgba(37,99,235,.08)',
-        handleStyle: { color: '#2563eb' },
-        textStyle: { fontSize: isMobile ? 9 : 11 }
-      }
-    ],
+    dataZoom: buildDataZoom(
+      { startValue: startIndex, endValue: total - 1 },
+      isMobile,
+      isMobile ? 4 : 10
+    ),
 
     series: seriesArr
   }, true);
@@ -1041,18 +976,14 @@ function renderPriceChart() {
    ============================================================ */
 function renderTable() {
   const series = getDisplaySeries();
-  const tbody = document.getElementById('tbody');
+  const tbody = $('tbody');
   const rows = [];
   const n = series.length;
-
-  let rowCount;
-  if (window.innerWidth <= 720) {
-    rowCount = 5;
-  } else {
-    rowCount = currentGran === 'month' ? 12 : 10;
-  }
-
   const isMobile = window.innerWidth <= 720;
+
+  const rowCount = isMobile
+    ? 5
+    : (currentGran === 'month' ? 12 : 10);
 
   for (let i = n - 1; i >= Math.max(0, n - rowCount); i--) {
     const r = series[i];
@@ -1081,7 +1012,7 @@ function renderTable() {
    ============================================================ */
 function showError(err) {
   const msg = (err && err.message) ? String(err.message) : '';
-  document.getElementById('chart-main').innerHTML =
+  $('chart-main').innerHTML =
     '<div class="err">' +
       '<div>未找到 <code>market_data.js</code> 或其中数据为空</div>' +
       '<div>请先运行后端脚本生成该文件，并确保它与本 HTML 在同一目录下</div>' +
@@ -1155,7 +1086,7 @@ let resizeTimer = null;
   renderPriceChart();
   renderTable();
 
-  document.getElementById('granSwitch').addEventListener('click', e => {
+  $('granSwitch').addEventListener('click', e => {
     const btn = e.target.closest('button');
     if (!btn || btn.classList.contains('active')) return;
     document.querySelectorAll('#granSwitch button').forEach(b => b.classList.remove('active'));
@@ -1165,20 +1096,16 @@ let resizeTimer = null;
     renderTable();
   });
 
-  document.getElementById('trendBtnHigh').addEventListener('click', function () {
-    showTrendHigh = !showTrendHigh;
-    this.classList.toggle('active', showTrendHigh);
-    renderPriceChart();
-  });
-  document.getElementById('trendBtnLow').addEventListener('click', function () {
-    showTrendLow = !showTrendLow;
-    this.classList.toggle('active', showTrendLow);
-    renderPriceChart();
-  });
-  document.getElementById('trendBtnMix').addEventListener('click', function () {
-    showTrendMix = !showTrendMix;
-    this.classList.toggle('active', showTrendMix);
-    renderPriceChart();
+  [
+    ['trendBtnHigh', 'high'],
+    ['trendBtnLow',  'low'],
+    ['trendBtnMix',  'mix']
+  ].forEach(([id, key]) => {
+    $(id).addEventListener('click', function () {
+      trendVisible[key] = !trendVisible[key];
+      this.classList.toggle('active', trendVisible[key]);
+      renderPriceChart();
+    });
   });
 
   window.addEventListener('resize', () => {
