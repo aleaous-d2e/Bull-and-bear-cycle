@@ -10,7 +10,7 @@ A股全市场总市值 + 平均股价 —— 单日模式，写入 market_data.j
   - 北交所：只请求一次，提取目标日期总市值（不做全量缓存）
   - 平均股价：api.daily 拉目标日全市场平均收盘价（close > 0 且 vol > 0）
   - 把结果合并进 market_data.js（同日期自动更新）
-  - market_data.js 中 ashare / bse 按日期降序排列（最新在前）
+  - market_data.js 中 ashare 按日期降序排列（最新在前）
   - 定时任务：每天 08:00 触发，内部判断今天是否交易日，非交易日直接结束
 =========================================================
 """
@@ -157,7 +157,7 @@ def get_avg_close(trade_date):
 # ==================== market_data.js 读写 ====================
 def load_market_data():
     if not os.path.exists(MARKET_DATA_JS):
-        return {"ashare": {}, "bse": {}, "meta": {},
+        return {"ashare": {}, "meta": {},
                 "annual": [], "gdp_annual": {}}
 
     with open(MARKET_DATA_JS, "r", encoding="utf-8") as f:
@@ -173,9 +173,8 @@ def load_market_data():
 
 def save_market_data(data):
     # 按日期降序（最新在前）
-    for key in ("ashare", "bse"):
-        if isinstance(data.get(key), dict):
-            data[key] = dict(sorted(data[key].items(),
+    if isinstance(data.get("ashare"), dict):
+        data["ashare"] = dict(sorted(data["ashare"].items(),
                                      key=lambda kv: kv[0], reverse=True))
 
     out = "window.MARKET_DATA = " + json.dumps(
@@ -249,12 +248,10 @@ def run_once():
         if avg_close is None or avg_close <= 0:
             raise ValueError(f"[错误] {date_str} 平均股价获取失败，终止写入！")
 
-        # ---------- 组装记录 ----------
+        # ---------- 组装记录（北交所市值并入 ashare_total，只保留三所合计） ----------
+        total_mv = ashare_total + (bse_mv or 0.0)
         record = {
-            "ashare_total": round(ashare_total, 4),
-            "sse_mv": round(sse_mv, 4) if sse_mv is not None else None,
-            "szse_mv": round(szse_mv, 4) if szse_mv is not None else None,
-            "cnt": cnt,
+            "ashare_total": round(total_mv, 4),
         }
 
         # 只取平均收盘价，open/high/low/close/price 统一写该值
@@ -263,20 +260,16 @@ def run_once():
 
         # ---------- 合并进内存数据 ----------
         data.setdefault("ashare", {})[date_str] = record
-        if bse_mv is not None:
-            data.setdefault("bse", {})[date_str.replace("-", "")] = round(bse_mv, 4)
 
         b_str = f"{bse_mv:.2f}" if bse_mv is not None else "None"
-        t_str = (f"{ashare_total + bse_mv:.2f}"
-                 if bse_mv is not None else f"{ashare_total:.2f}")
-        print(f"[{date_str}] 沪深 {a_str} | 北交所 {b_str} | 合计 {t_str}")
+        print(f"[{date_str}] 沪深 {a_str} | 北交所 {b_str} | 合计 {total_mv:.2f}")
 
     # ---------- 统一写入文件 ----------
     now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     meta = data.setdefault("meta", {})
     meta["generated_at"] = now
     meta["avg_price_updated_at"] = now
-    meta["version"] = 2
+    meta["version"] = 3
     meta["avg_price_fields"] = ["open", "high", "low", "close", "price"]
 
     save_market_data(data)
@@ -297,4 +290,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-

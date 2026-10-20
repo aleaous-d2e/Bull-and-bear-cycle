@@ -331,16 +331,9 @@ function setDelta(el, text, pct) {
 }
 
 /* ============================================================
-   1. GDP 年度数据（亿元）
+   1. GDP 年度数据（亿元）—— 从 market_data.js 读取
    ============================================================ */
-const GDP_ANNUAL = {
-  2005: 189907.5, 2006: 222578.4, 2007: 274179.7, 2008: 324317.8,
-  2009: 354521.6, 2010: 419253.3, 2011: 495707.6, 2012: 547510.6,
-  2013: 603660.4, 2014: 655782.9, 2015: 702511.5, 2016: 761193.0,
-  2017: 847382.9, 2018: 936010.1, 2019: 1005872.4, 2020: 1034867.6,
-  2021: 1173823.0, 2022: 1234029.4, 2023: 1294271.7, 2024: 1348066.2,
-  2025: 1401879.2
-};
+const GDP_ANNUAL = (window.MARKET_DATA && window.MARKET_DATA.gdp_annual) || {};
 
 function resolveLatestGDPYear() {
   const currentYear = new Date().getFullYear();
@@ -438,25 +431,16 @@ function valuation(r) {
 /* ============================================================
    3. 数据构建 & 聚合
    ============================================================ */
-function ymd(key) {
-  return key.slice(0, 4) + '-' + key.slice(4, 6) + '-' + key.slice(6, 8);
-}
-
 function num(v, fallback) {
   const n = Number(v);
   return Number.isFinite(n) ? n : fallback;
 }
 
-function buildSeries(ashare, bse) {
-  const bseMap = {};
-  for (const k in bse) bseMap[ymd(k)] = bse[k];
-
+function buildSeries(ashare) {
   const out = [];
   for (const date in ashare) {
     const r = ashare[date];
     if (!r || typeof r.ashare_total !== 'number') continue;
-    const bseMv = bseMap[date] || 0;
-    const mv = r.ashare_total + bseMv;
     const y = +date.slice(0, 4);
     // 使用有效 GDP（含当年推算值）
     const gdp = GDP_EFFECTIVE[y] || GDP_FALLBACK;
@@ -468,14 +452,10 @@ function buildSeries(ashare, bse) {
     const c = num(r.close, price);
 
     out.push({
-      date, mv, gdp,
-      bse: bseMv,
-      sse: r.sse_mv,
-      szse: r.szse_mv,
-      cnt: r.cnt,
+      date, mv: r.ashare_total, gdp,
       price: price,
       open: o, high: h, low: l, close: c,
-      ratio: mv / gdp
+      ratio: r.ashare_total / gdp
     });
   }
   out.sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
@@ -1058,7 +1038,6 @@ let resizeTimer = null;
     const k = ashareKeys[ashareKeys.length - 1];
     console.log('[诊断] ashare 最新样例', k, '=>', data.ashare[k]);
   }
-  console.log('[诊断] bse 共', Object.keys(data.bse || {}).length, '个交易日');
 
   if (!ashareKeys.length) {
     showError(new Error(
@@ -1068,7 +1047,7 @@ let resizeTimer = null;
     return;
   }
 
-  dailySeries = buildSeries(data.ashare, data.bse || {});
+  dailySeries = buildSeries(data.ashare);
   console.log('[诊断] dailySeries 构建结果:', dailySeries.length, '条');
 
   if (!dailySeries.length) {
