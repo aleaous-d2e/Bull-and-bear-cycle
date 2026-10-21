@@ -1,4 +1,4 @@
-name: Update Data and Notify
+name: Auto Update Market Data and Notify
 
 on:
   push:
