@@ -22,7 +22,7 @@ jobs:
         if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
         uses: actions/setup-python@v5
         with:
-          python-version: '3.10'
+          python-version: '3.12'
 
 
       # 3. 安装依赖并执行你的 Python 脚本
@@ -34,7 +34,7 @@ jobs:
           ZZSHARE_TOKEN: ${{ secrets.ZZSHARE_TOKEN }}
         run: |
           # 安装依赖（如果有 requirements.txt，建议改为 pip install -r requirements.txt）
-          pip install requests pandas zzshare
+          pip install requests pandas zzshare akshare
           python stock.py
 
       # 4. 检查 market_data.js 是否真的被更新了
