@@ -1,6 +1,5 @@
 window.__ETF_SHARE_BROAD__ = {
   "meta": {
-  "meta": {
     "510300": {
       "name": "沪深300华泰柏瑞"
     },
