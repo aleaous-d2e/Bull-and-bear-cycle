@@ -26,24 +26,30 @@ jobs:
 
 
       # 3. 安装依赖并执行你的 Python 脚本
-      # 注意：请把下方 你的脚本文件名.py 换成你实际的 python 文件名 (例如 update_data.py)
       - name: Run Python Script
         if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
         env:
-          # 如果你需要传入 ZZSHARE_TOKEN，建议存入 GitHub Secrets 并在这里注入
           ZZSHARE_TOKEN: ${{ secrets.ZZSHARE_TOKEN }}
         run: |
-          # 安装依赖（如果有 requirements.txt，建议改为 pip install -r requirements.txt）
           pip install requests pandas zzshare akshare
+          
+          # 运行 market 文件夹下的主流程
+          cd market
           python stock.py
+          
+          # 退回根目录，再进入 etf 文件夹运行流水线
+          cd ..
+          cd etf
+          python etf_pipeline.py
 
-      # 4. 检查 market_data.js 是否真的被更新了
+      # 4. 检查文件是否真的被更新了
       # 如果 Python 内部判断非交易日直接 return，文件不会变动，后续步骤会自动跳过
       - name: Check for changes
         if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
         id: check_changes
         run: |
-          if git diff --quiet market_data.js; then
+          # 同时检查 market 和 etf 目录下是否有变动
+          if git diff --quiet market/market_data.js && git diff --quiet etf/; then
             echo "changed=false" >> $GITHUB_OUTPUT
             echo "没有数据更新（可能是非交易日或接口无数据）"
           else
@@ -57,13 +63,14 @@ jobs:
         run: |
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
-          git add market_data.js
+          # 将 market 和 etf 文件夹的变更一起加入暂存区
+          git add market/market_data.js etf/
+          
           # [skip ci] 告诉 GitHub 机器人提交的代码不要再次触发 Actions，完美避免死循环
           git commit -m "Auto update market data [skip ci]"
           git push
 
       # 6. 发送企业微信成功通知
-      # 如果是手动 push 代码，或者定时/手动触发且文件有变化，才执行推送
       - name: Send WeCom Notification
         if: github.event_name == 'push' || ((github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') && steps.check_changes.outputs.changed == 'true')
         env:
@@ -71,19 +78,15 @@ jobs:
           SITE_URL: ${{ secrets.SITE_URL }}
           EVENT_NAME: ${{ github.event_name }}
         run: |
-          # 获取北京时间
           CURRENT_TIME=$(TZ='Asia/Shanghai' date '+%Y-%m-%d %H:%M:%S')
-          # 生成时间戳，用于打破网页缓存
           TIMESTAMP=$(date +%s)
 
-          # 根据触发来源判断文案
           if [ "$EVENT_NAME" == "schedule" ] || [ "$EVENT_NAME" == "workflow_dispatch" ]; then
             MSG_TITLE="✅ **数据更新提示**"
           else
             MSG_TITLE="✅ **代码推送成功，数据已更新**"
           fi
 
-          # 使用 jq 安全构建 JSON
           JSON_PAYLOAD=$(jq -n \
             --arg title "$MSG_TITLE" \
             --arg time "$CURRENT_TIME" \
@@ -95,7 +98,6 @@ jobs:
               }
             }')
           
-          # 发送请求
           HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" -H "Content-Type: application/json" -d "$JSON_PAYLOAD" "$WECOM_WEBHOOK")
           
           echo "企业微信 API 返回状态码: $HTTP_CODE"
@@ -107,14 +109,13 @@ jobs:
           fi
           echo "推送成功！"
 
-      # 7. 失败告警通知（如果前面的任何步骤报错，就会执行这里）
+      # 7. 失败告警通知
       - name: Send Failure Notification
         if: failure()
         env:
           WECOM_WEBHOOK: ${{ secrets.WECOM_WEBHOOK }}
         run: |
           CURRENT_TIME=$(TZ='Asia/Shanghai' date '+%Y-%m-%d %H:%M:%S')
-          # 构造失败消息（带上了 Actions 日志链接，点击直接跳转排错）
           JSON_PAYLOAD=$(jq -n \
             --arg time "$CURRENT_TIME" \
             --arg url "https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}" \
