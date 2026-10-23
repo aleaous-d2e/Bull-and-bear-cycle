@@ -17,9 +17,10 @@ Thumbs.db
 
 # 本地文件（不想上传的文件）
 cache_bse.json
-stock_local.py
-avg_price_stock.txt
+market/stock_local.py
+market/avg_price_stock.txt
 注意.txt
 ETF_GJD.py
 ETFGJD2.py
 main.py
+GJD与etf与科技赛道.md

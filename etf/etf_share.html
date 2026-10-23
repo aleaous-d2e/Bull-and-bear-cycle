@@ -1,0 +1,918 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>ETF 份额变动看板</title>
+
+<script src="https://cdn.jsdelivr.net/npm/lightweight-charts@4.2.0/dist/lightweight-charts.standalone.production.js"></script>
+<script>
+  if (!window.LightweightCharts) {
+    document.write('<script src="https://unpkg.com/lightweight-charts@4.2.0/dist/lightweight-charts.standalone.production.js"><\/script>');
+  }
+</script>
+
+<style>
+  :root {
+    --bg: #0b1220;
+    --panel: #111c30;
+    --panel-2: #16233a;
+    --line: #22314d;
+    --text: #e6edf7;
+    --muted: #8ba0bd;
+    --up: #34d399;
+    --down: #f87171;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    padding: 24px 20px 56px;
+    min-height: 100vh;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+    color: var(--text);
+    background: radial-gradient(1200px 620px at 18% -12%, #16233a 0%, var(--bg) 62%), var(--bg);
+  }
+
+  .wrap { max-width: 1400px; margin: 0 auto; }
+
+  header { margin-bottom: 24px; display: flex; flex-wrap: wrap; justify-content: space-between; align-items: flex-end; }
+  header h1 { margin: 0; font-size: 26px; font-weight: 700; }
+  header p { margin: 6px 0 0; font-size: 13.5px; color: var(--muted); }
+
+  /* 工具栏 */
+  .toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 16px;
+    margin-bottom: 20px;
+    align-items: center;
+  }
+  .toolbar .group {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    padding: 4px;
+    background: rgba(22,35,58,0.6);
+    border: 1px solid var(--line);
+    border-radius: 999px;
+  }
+  /* 分类按钮组：Web 端靠右 */
+  .category-group { margin-left: auto; }
+
+  .toolbar button {
+    padding: 6px 14px;
+    font-size: 13px;
+    color: var(--muted);
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: 999px;
+    cursor: pointer;
+    transition: all .18s ease;
+  }
+  .toolbar button:hover { color: var(--text); }
+  .toolbar button.active {
+    color: #04121f;
+    font-weight: 600;
+    background: linear-gradient(120deg, #67e8f9, #38bdf8);
+  }
+
+  /* 模式切换与悬浮提示 */
+  .mode-wrapper {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .info-tooltip {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    background-color: rgba(34, 49, 77, 0.6);
+    border: 1px solid var(--line);
+    color: var(--muted);
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
+  .info-tooltip:hover {
+    background-color: rgba(56, 189, 248, 0.15);
+    color: #38bdf8;
+    border-color: #38bdf8;
+  }
+  .info-tooltip .icon {
+    font-size: 14px;
+    font-weight: 700;
+    font-family: monospace;
+  }
+  .info-tooltip .tooltip-text {
+    visibility: hidden;
+    opacity: 0;
+    position: absolute;
+    top: 150%;
+    left: 50%;
+    transform: translateX(-50%) translateY(-4px);
+    background-color: #16233a;
+    color: #c6d4e8;
+    text-align: center;
+    padding: 8px 12px;
+    border-radius: 8px;
+    border: 1px solid var(--line);
+    font-size: 12px;
+    white-space: nowrap;
+    z-index: 10;
+    transition: all 0.2s ease;
+    pointer-events: none;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+    line-height: 1.6;
+  }
+  .info-tooltip:hover .tooltip-text {
+    visibility: visible;
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
+  .info-tooltip .tooltip-text::after {
+    content: "";
+    position: absolute;
+    bottom: 100%;
+    left: 50%;
+    margin-left: -5px;
+    border-width: 5px;
+    border-style: solid;
+    border-color: transparent transparent #16233a transparent;
+  }
+
+  /* ===== 多图表网格：Web 端一行 2 个，H5 端一行 1 个 ===== */
+  .charts-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 16px;
+  }
+
+  .chart-card {
+    background: linear-gradient(160deg, var(--panel-2), var(--panel));
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    padding: 16px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, .25);
+    display: flex;
+    flex-direction: column;
+    min-width: 0;            /* 防止 grid 子项被内容撑破 */
+  }
+
+  .chart-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 12px;
+    gap: 10px;
+  }
+  .chart-title {
+    font-size: 15px;
+    font-weight: 600;
+    color: #c6d4e8;
+  }
+
+  /* 颜色图例：每条 ETF 曲线对应一个色点 */
+  .chart-legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px 12px;
+    margin-top: 6px;
+    font-size: 11.5px;
+    color: var(--muted);
+    line-height: 1.5;
+  }
+  .legend-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    white-space: nowrap;
+  }
+  .legend-item i {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    display: inline-block;
+    flex: 0 0 auto;
+  }
+
+  /* 组内切换 Tabs */
+  .group-tabs {
+    display: flex;
+    background: rgba(11, 18, 32, 0.6);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 2px;
+    flex-shrink: 0;
+  }
+  .tab-btn {
+    padding: 4px 8px;
+    font-size: 11.5px;
+    color: var(--muted);
+    background: transparent;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all .15s ease;
+    white-space: nowrap;
+  }
+  .tab-btn:hover { color: var(--text); }
+  .tab-btn.active {
+    color: #04121f;
+    font-weight: 600;
+    background: #38bdf8;
+    box-shadow: 0 2px 6px rgba(56, 189, 248, 0.3);
+  }
+
+  /* 单个图表容器 */
+  .chart-body {
+    height: 280px;
+    width: 100%;
+    position: relative;
+    overflow: hidden;
+  }
+  /* 隐藏 Logo */
+  #tv-attr-logo, a[href*="tradingview.com"] { display: none !important; }
+
+  /* 悬浮窗 */
+  .lw-tooltip {
+    position: fixed; z-index: 9999; display: none; pointer-events: none;
+    min-width: 180px; padding: 10px 14px;
+    background: rgba(17, 28, 48, 0.96); border: 1px solid var(--line);
+    border-radius: 10px; box-shadow: 0 8px 28px rgba(0, 0, 0, .4);
+    backdrop-filter: blur(6px); font-size: 12.5px; color: var(--text);
+  }
+  .lw-tooltip-date { margin-bottom: 6px; font-size: 12px; color: var(--muted); letter-spacing: .02em; }
+  .lw-tooltip-row { display: flex; align-items: center; gap: 8px; margin-top: 5px; }
+  .lw-dot { width: 8px; height: 8px; border-radius: 50%; flex: 0 0 auto; }
+  .lw-tooltip-row .lw-label { color: #c6d4e8; white-space: nowrap; font-size: 11px;}
+  .lw-tooltip-row .lw-code { color: var(--muted); font-size: 10.5px; margin-left: 2px; }
+  .lw-tooltip-row b { margin-left: auto; padding-left: 12px; font-weight: 600; font-variant-numeric: tabular-nums; }
+
+  .empty { display: flex; align-items: center; justify-content: center; height: 400px; font-size: 14px; color: var(--muted); }
+
+  /* ===== H5 端：一行一个卡片 + 尺寸微调 ===== */
+  @media (max-width: 768px) {
+    body {
+      padding: 16px 12px 40px;
+    }
+
+    header { margin-bottom: 16px; }
+    header h1 { font-size: 20px; }
+    header p { font-size: 12.5px; }
+
+    .toolbar {
+      gap: 10px;
+      margin-bottom: 14px;
+    }
+    .toolbar button { padding: 6px 12px; }
+    .category-group { margin-left: 0; }   /* H5 不靠右，自然换行 */
+
+    .charts-grid {
+      grid-template-columns: minmax(0, 1fr);
+      gap: 12px;
+    }
+
+    .chart-card {
+      padding: 12px;
+      border-radius: 12px;
+    }
+    .chart-header { flex-wrap: wrap; }
+    .group-tabs { overflow-x: auto; max-width: 100%; }
+    .chart-body { height: 240px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <header>
+    <div>
+      <h1>ETF 场内份额变动看板</h1>
+      <p id="subtitle">同类指数合并切换对比 · 数据来源：上交所 / 深交所</p>
+    </div>
+  </header>
+
+  <div class="toolbar">
+    <!-- 模式切换和感叹号提示 -->
+    <div class="mode-wrapper">
+      <div class="group">
+        <button class="mode-btn active" data-mode="abs">绝对份额</button>
+        <button class="mode-btn" data-mode="norm">归一化对比</button>
+      </div>
+
+      <div class="info-tooltip">
+        <span class="icon">!</span>
+        <span class="tooltip-text">绝对份额：看真实规模变动<br>归一化对比：看相对涨跌趋势</span>
+      </div>
+    </div>
+
+    <div class="group">
+      <button class="range-btn" data-months="1">1M</button>
+      <button class="range-btn" data-months="3">3M</button>
+      <button class="range-btn active" data-months="6">6M</button>
+      <button class="range-btn" data-months="12">1Y</button>
+      <button class="range-btn" data-months="0">全部</button>
+    </div>
+
+    <!-- 分类切换 -->
+    <div class="group category-group">
+      <button class="category-btn active" data-category="broad">宽基</button>
+      <button class="category-btn" data-category="sector">行业主题</button>
+    </div>
+  </div>
+
+  <div class="charts-grid" id="charts-grid"></div>
+</div>
+
+<div id="tooltip" class="lw-tooltip"></div>
+
+<!-- 动态数据（由 etf_pipeline.py 生成，按宽基/行业主题拆分） -->
+<script src="etf_share_data_broad.js"></script>
+<script src="etf_share_data_sector.js"></script>
+<script>
+  // 合并两个数据文件为统一的 DATA 对象，后续渲染逻辑无需感知拆分
+  window.__ETF_SHARE_DATA__ = {
+    meta:   { ...(window.__ETF_SHARE_BROAD__?.meta   || {}),
+              ...(window.__ETF_SHARE_SECTOR__?.meta  || {}) },
+    series: { ...(window.__ETF_SHARE_BROAD__?.series || {}),
+              ...(window.__ETF_SHARE_SECTOR__?.series || {}) },
+  };
+</script>
+
+<!-- 静态分组配置 -->
+<script>
+  window.__ETF_GROUPS__ = [
+    // ===== 宽基 =====
+    { "name": "科创板50",         "codes": ["588080","588000"],           "category": "broad" },
+    { "name": "沪深300/上证50",  "codes": ["510300", "510310"], "category": "broad" },
+    { "name": "创业板/上证50",           "codes": ["159915", "159952","159949","510050"], "category": "broad" },
+    { "name": "中证系列",          "codes": ["510500","512100","563300"],"category": "broad" },
+
+    // ===== 行业主题 =====
+    // 新上市 ETF 待观察：放在行业主题最顶端，只画当日份额，人工确认后再转入正式分组。
+    // 对应 Python 端的 WATCH_CODES，两处需同步维护。
+    // 当前无待观察标的时 codes 为空，前端会自动隐藏该分组。
+    { "name": "🆕 待观察", "codes": [], "category": "sector" },
+
+    { "name": "AI硬件", "codes": ["159516","515880"], "category": "sector" },
+    { "name": "AI应用",       "codes": ["159852","159869","513330"], "category": "sector" },
+    { "name": "机器人/AI/军工龙头",     "codes": ["562500","159819","512710"], "category": "sector" },
+    { "name": "医疗/创新药",     "codes": ["159992","512170"], "category": "sector" },
+    { "name": "电相关",       "codes": ["159611","159326","159755","159870"], "category": "sector" },
+    { "name": "消费",   "codes": ["159865","159732","512690"], "category": "sector" },
+    { "name": "有色金属/黄金",   "codes": ["512400","518880"], "category": "sector" },
+    { "name": "券商/银行",       "codes": ["512000","512800"], "category": "sector" },
+
+    { "name": "红利低波",   "codes": ["512890"], "category": "sector" },
+  ];
+</script>
+
+<script>
+(function () {
+  "use strict";
+
+  const DATA = window.__ETF_SHARE_DATA__;
+  const gridEl = document.getElementById("charts-grid");
+
+  // 基础数据校验
+  if (!DATA || !DATA.series || !Object.keys(DATA.series).length) {
+    gridEl.outerHTML = '<div class="empty">未找到数据文件，或数据为空。</div>';
+    return;
+  }
+
+  // === 从 HTML 中读取分组配置 ===
+  const GROUPS = window.__ETF_GROUPS__ || [];
+  if (!GROUPS.length) {
+    gridEl.outerHTML = '<div class="empty">HTML 中未配置 __ETF_GROUPS__ 分组信息。</div>';
+    return;
+  }
+
+  // 从外部数据源读取名称映射 (匹配 meta 结构)
+  const NAME_MAP = {};
+  if (DATA.meta) {
+    for (const code in DATA.meta) {
+      if (DATA.meta[code] && DATA.meta[code].name) {
+        NAME_MAP[code] = DATA.meta[code].name;
+      }
+    }
+  }
+
+  // === 组内轮换调色板：高对比度亮色（专为深色背景优化，避免融色） ===
+  const PALETTE = [
+    "#38bdf8", // 亮天蓝
+    "#fbbf24", // 亮琥珀
+    "#34d399", // 亮翠绿
+    "#fb7185", // 亮玫瑰红
+    "#c084fc", // 亮紫
+    "#fb923c", // 亮橙
+    "#a3e635", // 荧光黄绿
+    "#22d3ee", // 亮青
+    "#f472b6", // 亮粉
+    "#2dd4bf", // 亮青绿
+    "#facc15", // 亮黄
+    "#818cf8", // 亮靛蓝
+  ];
+
+  // === 全局配色表：所有分组统一顺序分配 ===
+  const CODE_COLOR = (function () {
+    const m = {};
+    let i = 0;
+    GROUPS.forEach((g) => {
+      g.codes.forEach((c) => {
+        if (m[c] === undefined) m[c] = PALETTE[i++ % PALETTE.length];
+      });
+    });
+    return m;
+  })();
+
+  function buildColorMap(group) {
+    const m = {};
+    group.codes.forEach((c) => { m[c] = CODE_COLOR[c] || PALETTE[0]; });
+    return m;
+  }
+
+  const fmt = (n, d = 2) => Number(n).toLocaleString("zh-CN", { minimumFractionDigits: d, maximumFractionDigits: d });
+  const sortByDate = (arr) => arr.slice().sort((a, b) => a.date.localeCompare(b.date));
+  const shortName = (code) => (NAME_MAP[code] || code).replace("ETF", "");
+
+  // 分组是否有可渲染的数据：codes 非空且至少一只在 series 里有数据点。
+  // 用于自动隐藏「🆕 待观察」这类当前无内容的空分组。
+  const groupHasData = (g) =>
+    Array.isArray(g.codes) &&
+    g.codes.length > 0 &&
+    g.codes.some((c) => (DATA.series[c] || []).length > 0);
+
+  function buildTabs(group) {
+    if (group.codes.length > 1) {
+      return [
+        { label: "全部", codes: group.codes.slice() },
+        ...group.codes.map(c => ({ label: shortName(c), codes: [c] }))
+      ];
+    }
+    return null;
+  }
+
+  function toTimeStr(t) {
+    if (!t) return null;
+    if (typeof t === 'string') return t;
+    if (typeof t === 'number') return new Date(t * 1000).toISOString().slice(0, 10);
+    if (typeof t === 'object' && t.year !== undefined) {
+      return `${t.year}-${String(t.month).padStart(2, '0')}-${String(t.day).padStart(2, '0')}`;
+    }
+    return null;
+  }
+
+  // ==== 缓存静态 DOM，避免高频回调中重复查询 ====
+  const rangeBtns    = Array.from(document.querySelectorAll(".range-btn"));
+  const modeBtns     = Array.from(document.querySelectorAll(".mode-btn"));
+  const categoryBtns = Array.from(document.querySelectorAll(".category-btn"));
+
+  // 全局状态
+  let currentMode = "abs";
+  let chartInstances = [];
+  let isSyncingTime = false;
+  let isSyncingCrosshair = false;
+  let currentRangeMonths = 6; // 默认 6M
+
+  // 收集所有真实的交易日
+  let allRealDates = [];
+  GROUPS.forEach(g => g.codes.forEach(c => {
+    if (DATA.series[c]) DATA.series[c].forEach(p => allRealDates.push(p.date));
+  }));
+  allRealDates = [...new Set(allRealDates)].sort();
+
+  // === 1. 渲染 DOM 容器 ===
+  function initDOM() {
+    gridEl.innerHTML = GROUPS.map((g, idx) => {
+      const legendHtml = g.codes.map(c => `
+        <span class="legend-item"><i style="background:${CODE_COLOR[c] || PALETTE[0]}"></i>${shortName(c)}</span>
+      `).join("");
+
+      const tabs = buildTabs(g);
+      let tabsHtml = "";
+      if (tabs && tabs.length > 1) {
+        tabsHtml = `
+          <div class="group-tabs" id="tabs-${idx}">
+            ${tabs.map((t, ti) =>
+              `<button class="tab-btn${ti === 0 ? " active" : ""}" data-tab="${ti}">${t.label}</button>`
+            ).join("")}
+          </div>
+        `;
+      }
+
+      const category = g.category || "broad";
+      // 空分组（如暂无新 ETF 的「待观察」）直接隐藏，不占位置
+      const displayStyle = groupHasData(g) && category === "broad" ? "flex" : "none";
+
+      return `
+        <div class="chart-card" id="card-${idx}" data-category="${category}" style="display: ${displayStyle};">
+          <div class="chart-header">
+            <div>
+              <div class="chart-title">${g.name}</div>
+              <div class="chart-legend">${legendHtml}</div>
+            </div>
+            ${tabsHtml}
+          </div>
+          <div class="chart-body" id="chart-${idx}"></div>
+        </div>
+      `;
+    }).join("");
+  }
+
+  // === 2. 创建单个图表并绑定交互 ===
+  function createChart(containerId, group, groupIdx) {
+    const el = document.getElementById(containerId);
+    const chart = LightweightCharts.createChart(el, {
+      autoSize: true,
+      layout: {
+        background: { type: "solid", color: "transparent" },
+        textColor: "#8ba0bd", fontSize: 11,
+        attributionLogo: false,
+      },
+      grid: { vertLines: { color: "rgba(139,160,189,0.04)" }, horzLines: { color: "rgba(139,160,189,0.04)" } },
+      crosshair: {
+        mode: LightweightCharts.CrosshairMode.Normal,
+        vertLine: { color: "rgba(139,160,189,0.3)", width: 1, style: 2, labelBackgroundColor: "#22314d" },
+        horzLine: { color: "rgba(139,160,189,0.3)", width: 1, style: 2, labelBackgroundColor: "#22314d" },
+      },
+      rightPriceScale: { borderColor: "transparent", scaleMargins: { top: 0.2, bottom: 0.2 } },
+      leftPriceScale: { visible: false },
+      timeScale: { borderColor: "transparent", rightOffset: 2, barSpacing: 4 },
+      handleScroll: { mouseWheel: true, pressedMouseMove: true },
+      handleScale: { mouseWheel: true, pinch: true, axisPressedMouseMove: true },
+    });
+
+    const ctx = {
+      chart, group, groupIdx,
+      seriesList: [],
+      seriesByCode: {},
+      timeIndex: {},
+      markerInfo: {},
+      colorMap: buildColorMap(group),
+      tabs: buildTabs(group),
+      visibleCodes: group.codes.slice()
+    };
+
+    if (ctx.tabs && ctx.tabs.length > 1) {
+      const tabEls = document.querySelectorAll(`#tabs-${groupIdx} .tab-btn`);
+      tabEls.forEach(tabEl => {
+        tabEl.addEventListener("click", () => {
+          tabEls.forEach(t => t.classList.remove("active"));
+          tabEl.classList.add("active");
+          const ti = parseInt(tabEl.dataset.tab, 10);
+          ctx.visibleCodes = ctx.tabs[ti].codes.slice();
+          updateGroupVisibility(ctx);
+        });
+      });
+    }
+
+    bindTooltip(ctx, el);
+    bindCrosshairSync(ctx);
+    bindTimeScaleSync(ctx);
+
+    return ctx;
+  }
+
+  // === 3. 控制单图内多条线的显示/隐藏 + 刷新极值标记 ===
+  function updateGroupVisibility(ctx) {
+    const multi = ctx.visibleCodes.length > 1;
+    const isNorm = currentMode === "norm";
+
+    ctx.group.codes.forEach((code) => {
+      const s = ctx.seriesByCode[code];
+      if (!s) return;
+
+      s.applyOptions({ visible: ctx.visibleCodes.includes(code) });
+
+      const info = ctx.markerInfo[code];
+      if (!info) return;
+
+      const peakText = isNorm ? "峰值" : (multi ? "峰" : `峰 ${fmt(info.maxVal)}`);
+      const lowText  = isNorm ? "低点" : (multi ? "低" : `低 ${fmt(info.lowVal)}`);
+
+      s.setMarkers([
+        {
+          time: info.lowDate,
+          position: "belowBar",
+          color: info.color,
+          shape: "arrowUp",
+          text: lowText,
+        },
+        {
+          time: info.maxDate,
+          position: "aboveBar",
+          color: info.color,
+          shape: "arrowDown",
+          text: peakText,
+        },
+      ]);
+    });
+  }
+
+  // === 4. 拖拽/缩放时的全局同步 ===
+  function bindTimeScaleSync(ctx) {
+    ctx.chart.timeScale().subscribeVisibleTimeRangeChange((range) => {
+      if (!range || isSyncingTime) return;
+      const fromStr = toTimeStr(range.from);
+      const toStr = toTimeStr(range.to);
+      if (!fromStr || !toStr) return;
+
+      isSyncingTime = true;
+      chartInstances.forEach(otherCtx => {
+        if (otherCtx.chart !== ctx.chart) {
+          try {
+            otherCtx.chart.timeScale().setVisibleRange({ from: fromStr, to: toStr });
+          } catch (e) { /* 忽略异常 */ }
+        }
+      });
+
+      const visibleDays = (new Date(toStr).getTime() - new Date(fromStr).getTime()) / (1000 * 60 * 60 * 24);
+      rangeBtns.forEach(b => {
+        let isActive = false;
+        if (b.dataset.months === "0" && visibleDays > 700) isActive = true;
+        if (b.dataset.months === "12" && visibleDays > 300 && visibleDays < 400) isActive = true;
+        if (b.dataset.months === "6" && visibleDays > 150 && visibleDays < 200) isActive = true;
+        if (b.dataset.months === "3" && visibleDays > 70 && visibleDays < 110) isActive = true;
+        if (b.dataset.months === "1" && visibleDays < 45) isActive = true;
+        b.classList.toggle("active", isActive);
+      });
+
+      setTimeout(() => { isSyncingTime = false; }, 50);
+    });
+  }
+
+  // === 5. 十字线同步 ===
+  function bindCrosshairSync(ctx) {
+    ctx.chart.subscribeCrosshairMove((param) => {
+      if (isSyncingCrosshair) return;
+      isSyncingCrosshair = true;
+
+      chartInstances.forEach(otherCtx => {
+        if (otherCtx.chart !== ctx.chart) {
+          const otherCard = document.getElementById(`card-${otherCtx.groupIdx}`);
+          if (otherCard && otherCard.style.display === "none") return;
+
+          if (!param.time) {
+            otherCtx.chart.clearCrosshairPosition();
+          } else {
+            const currentTimeStr = toTimeStr(param.time);
+            const firstVisibleCode = otherCtx.visibleCodes[0] || otherCtx.group.codes[0];
+            const idx = otherCtx.timeIndex[firstVisibleCode];
+
+            if (idx && currentTimeStr) {
+              const v = idx.get(currentTimeStr);
+              if (v !== undefined) {
+                const series = otherCtx.seriesByCode[firstVisibleCode];
+                if (series) otherCtx.chart.setCrosshairPosition(v, param.time, series);
+              }
+            }
+          }
+        }
+      });
+
+      setTimeout(() => { isSyncingCrosshair = false; }, 20);
+    });
+  }
+
+  // === 6. 悬浮窗（含基金代码） ===
+  const tooltipEl = document.getElementById("tooltip");
+  function bindTooltip(ctx, chartEl) {
+    ctx.chart.subscribeCrosshairMove((param) => {
+      if (!param.time || !param.point) { tooltipEl.style.display = "none"; return; }
+
+      const dateStr = toTimeStr(param.time);
+      let html = `<div class="lw-tooltip-date">${dateStr}</div>`;
+      let hasData = false;
+
+      ctx.group.codes.forEach((code) => {
+        if (!ctx.visibleCodes.includes(code)) return;
+        const series = ctx.seriesByCode[code];
+        if (!series) return;
+        const d = param.seriesData.get(series);
+        if (!d) return;
+
+        hasData = true;
+        const nm = NAME_MAP[code] || code;
+        // 名称与代码不同时，名称后追加代码；相同则只显示一次
+        const labelHtml = nm === code
+          ? `<span class="lw-label">${code}</span>`
+          : `<span class="lw-label">${nm}<span class="lw-code">${code}</span></span>`;
+
+        html += `
+          <div class="lw-tooltip-row">
+            <span class="lw-dot" style="background:${ctx.colorMap[code]}"></span>
+            ${labelHtml}
+            <b>${fmt(d.value)}${currentMode === "norm" ? "" : " 亿份"}</b>
+          </div>`;
+      });
+
+      if (!hasData) { tooltipEl.style.display = "none"; return; }
+
+      tooltipEl.innerHTML = html;
+      tooltipEl.style.display = "block";
+
+      const rect = chartEl.getBoundingClientRect();
+      const left = Math.min(rect.left + param.point.x + 15, window.innerWidth - tooltipEl.offsetWidth - 10);
+      tooltipEl.style.left = left + "px";
+      tooltipEl.style.top = rect.top + param.point.y + 15 + "px";
+    });
+
+    chartEl.addEventListener("mouseleave", () => tooltipEl.style.display = "none");
+  }
+
+  // === 7. 应用模式与峰值/低点标记（低点自动寻找） ===
+  function applyMode(mode) {
+    currentMode = mode;
+    const isNorm = mode === "norm";
+
+    chartInstances.forEach((ctx) => {
+      ctx.seriesList.forEach(s => ctx.chart.removeSeries(s));
+      ctx.seriesList = [];
+      ctx.seriesByCode = {};
+      ctx.timeIndex = {};
+      ctx.markerInfo = {};
+
+      const card = document.getElementById(`card-${ctx.groupIdx}`);
+      if (card && card.style.display === "none") return;
+
+      ctx.group.codes.forEach((code) => {
+        const pts = sortByDate(DATA.series[code] || []);
+        if (!pts.length) return;
+
+        const base = pts[0].shares_yi || 1;
+        const chartData = pts.map((p) => ({
+          time: p.date,
+          value: isNorm ? +((p.shares_yi / base) * 100).toFixed(2) : p.shares_yi,
+        }));
+
+        const idx = new Map();
+        chartData.forEach(d => idx.set(d.time, d.value));
+        ctx.timeIndex[code] = idx;
+
+        const color = ctx.colorMap[code];
+        const series = ctx.chart.addLineSeries({
+          color: color,
+          lineWidth: 1.8,
+          priceLineVisible: false,
+          lastValueVisible: false,
+          crosshairMarkerVisible: true,
+          crosshairMarkerRadius: 4,
+          crosshairMarkerBorderColor: color,
+          crosshairMarkerBackgroundColor: color,
+        });
+
+        series.setData(chartData);
+
+        // --- 极值计算：峰值与低点均自动寻找 ---
+        let maxPt = pts[0];
+        let lowPt = pts[0];
+
+        pts.forEach(p => {
+          if (p.shares_yi > maxPt.shares_yi) maxPt = p;
+          if (p.shares_yi < lowPt.shares_yi) lowPt = p;
+        });
+
+        ctx.markerInfo[code] = {
+          color: color,
+          lowDate: lowPt.date,
+          lowVal: lowPt.shares_yi,
+          maxDate: maxPt.date,
+          maxVal: maxPt.shares_yi,
+        };
+
+        ctx.seriesList.push(series);
+        ctx.seriesByCode[code] = series;
+      });
+
+      if (isNorm && ctx.seriesList.length > 0) {
+        ctx.seriesList[0].createPriceLine({
+          price: 100,
+          color: "rgba(255,255,255,0.15)",
+          lineWidth: 1,
+          lineStyle: 2,
+          axisLabelVisible: false,
+        });
+      }
+
+      updateGroupVisibility(ctx);
+    });
+
+    modeBtns.forEach((b) => b.classList.toggle("active", b.dataset.mode === mode));
+    applyRange(currentRangeMonths);
+  }
+
+  // === 8. 顶部按钮时间范围同步 ===
+  function applyRange(months) {
+    currentRangeMonths = months;
+
+    // 强制同步按钮状态，解决切换分类或模式时，事件回调被 isSyncingTime 拦截导致的高亮不同步问题
+    rangeBtns.forEach((b) => {
+      b.classList.toggle("active", b.dataset.months === String(months));
+    });
+
+    if (!allRealDates.length) return;
+
+    const lastDateStr = allRealDates[allRealDates.length - 1];
+    let fromStr = allRealDates[0];
+
+    if (months > 0) {
+      const lastDate = new Date(lastDateStr);
+      const targetDate = new Date(lastDate);
+      targetDate.setMonth(targetDate.getMonth() - months);
+      const targetTime = targetDate.getTime();
+
+      for (let i = 0; i < allRealDates.length; i++) {
+        if (new Date(allRealDates[i]).getTime() >= targetTime) {
+          fromStr = allRealDates[i];
+          break;
+        }
+      }
+    }
+
+    isSyncingTime = true;
+    chartInstances.forEach(ctx => {
+      const card = document.getElementById(`card-${ctx.groupIdx}`);
+      if (card && card.style.display !== "none") {
+        try {
+          ctx.chart.timeScale().setVisibleRange({ from: fromStr, to: lastDateStr });
+        } catch (e) { /* 忽略异常 */ }
+      }
+    });
+    setTimeout(() => { isSyncingTime = false; }, 100);
+  }
+
+  rangeBtns.forEach((btn) => {
+    btn.addEventListener("click", () => {
+      applyRange(parseInt(btn.dataset.months, 10));
+    });
+  });
+
+  modeBtns.forEach((btn) => {
+    btn.addEventListener("click", () => {
+      if (btn.classList.contains("active")) return;
+      applyMode(btn.dataset.mode);
+    });
+  });
+
+  // === 9. 分类切换（包含按需懒加载初始化） ===
+  categoryBtns.forEach((btn) => {
+    btn.addEventListener("click", () => {
+      if (btn.classList.contains("active")) return;
+
+      categoryBtns.forEach(b => b.classList.remove("active"));
+      btn.classList.add("active");
+
+      const category = btn.dataset.category;
+
+      document.querySelectorAll(".chart-card").forEach(card => {
+        const idx = parseInt(card.id.replace("card-", ""), 10);
+        const g = GROUPS[idx];
+
+        // 空分组永远隐藏：不显示、也不创建图表（避免切到 sector 时冒出空卡片）
+        if (!groupHasData(g)) {
+          card.style.display = "none";
+          return;
+        }
+
+        if (card.dataset.category === category) {
+          card.style.display = "flex";
+
+          const isInit = chartInstances.some(ctx => ctx.groupIdx === idx);
+          if (!isInit) {
+            const ctx = createChart(`chart-${idx}`, g, idx);
+            chartInstances.push(ctx);
+          }
+        } else {
+          card.style.display = "none";
+        }
+      });
+
+      setTimeout(() => {
+        applyMode(currentMode);
+      }, 50);
+    });
+  });
+
+  // === 10. 启动 ===
+  initDOM();
+
+  GROUPS.forEach((g, idx) => {
+    const category = g.category || "broad";
+    // 只初始化有数据的宽基分组；空分组不创建图表实例
+    if (category === "broad" && groupHasData(g)) {
+      const ctx = createChart(`chart-${idx}`, g, idx);
+      chartInstances.push(ctx);
+    }
+  });
+
+  applyMode("abs");
+
+})();
+</script>
+</body>
+</html>
