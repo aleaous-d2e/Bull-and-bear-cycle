@@ -1,14 +1,14 @@
 # -*- coding: utf-8 -*-
 """
-ETF 份额数据流水线（合并版）
+ETF 份额数据流水线
 ======================================================
-合并原 ETF_GJD.py（每日份额增量抓取）与 ETFGJD2.py（ETF 池审查）为单一脚本。
+合并ETF每日份额增量抓取与 ETF 池审查为单一脚本。
 
-    【阶段 1】池审查（原 ETFGJD2.py）
+    【阶段 1】ETF池审查
         抓取沪深快照 → 分类过滤 → 组内截断 → 成交额过滤 → 输出 etf_pool_review.csv
         每月 2 号（非交易日顺延至下一交易日）执行。
 
-    【阶段 2】历史份额增量更新（原 ETF_GJD.py）
+    【阶段 2】份额增量更新
         读取旧数据 → 计算缺失日期 → 批量补抓 → 输出宽基/行业主题两个 JS
         每个交易日执行。
 
@@ -55,31 +55,32 @@ CSV_PATH = "etf_pool_review.csv"
 BROAD_JS = "etf_share_data_broad.js"
 SECTOR_JS = "etf_share_data_sector.js"
 
-# 日期范围：END_DATE 取今天，避免未来日期进入交易日历
+# 日期范围：END_DATE 取今天，避免未来日期进入交易日造成无效请求
 END_DATE = date.today()
-# 宽基保留 6 年，行业主题保留 3 年
+# 宽基查询近 6 年，行业主题获取近 3 年
 BROAD_START_DATE = date(END_DATE.year - 6, END_DATE.month, END_DATE.day)
 SECTOR_START_DATE = date(END_DATE.year - 3, END_DATE.month, END_DATE.day)
 
-# 限速
+# 自行限速防IP被封
 SLEEP_PER_REQUEST = 0.15         # 上交所单日份额接口
 SLEEP_PER_NAME_REQUEST = 0.1     # 上交所扩位简称批量接口
 
 # ============================================================
-# 池审查配置（原 ETFGJD2.py）
+# ETF池审查配置
 # ============================================================
-# 排除池：用于在分类前砍掉非目标产品，减少后续计算和冗余
+# 排除池：在分类前砍掉非目标类型，减少后续工作量
 EXCLUDE_KEYWORDS = "货币|债|现金流|增强|主动|短融"
 
 # 份额门槛：低于 10亿份的迷你基金直接淘汰
 MIN_SHARES_YI = 10.0
 
-# 成交额门槛（亿元）：截断后的标的，成交额低于该值则剔除
-MIN_TURNOVER_YI = 1.0
 # 份额阈值（亿份）：只有低于该值的才需要查成交额
 TURNOVER_CHECK_SHARES_YI = 100.0
 
-# 需要整体剔除的宽基分类
+# 成交额门槛（亿元）：截断后的标的，成交额低于该值则剔除
+MIN_TURNOVER_YI = 1.0
+
+# 目前只自动追踪行业主题类，宽基排除
 REMOVE_BROAD_CATEGORIES = {"宽基"}
 
 
@@ -113,7 +114,6 @@ def get_trade_dates(start: date, end: date) -> list[date]:
 
 def last_trade_date() -> date:
     """最近一个份额数据已定稿的交易日（T-1 语义）。
-
     两个交易所的份额数据都是 T+1 才定稿，所以取严格早于今天的最近交易日。
     """
     today = date.today()
@@ -124,7 +124,7 @@ def last_trade_date() -> date:
 
 
 def is_review_day() -> bool:
-    """判断今天是否应该跑池审查：本月 2 号或之后第一个交易日。"""
+    """判断今天是否应该跑ETF池审查：本月 2 号或之后第一个交易日。"""
     today = date.today()
     if today.day < 2:
         return False
@@ -134,10 +134,10 @@ def is_review_day() -> bool:
 
 
 # ============================================================
-# 阶段 1：池审查（原 ETFGJD2.py 逻辑）
+# 阶段 1：ETF池审查逻辑
 # ============================================================
 # 核心逻辑：行业主题优先，宽基垫底。
-# 列表顺序决定了匹配优先级，越靠前越先被匹配到。
+# 列表顺序决定了匹配优先级，越靠前越先匹配。
 # 必须严格遵守“防截胡”原则：越精细的规则必须越靠前。
 THEME_RULES = [
     # 【一、极易被截胡的规则必须排在前面】
@@ -189,9 +189,9 @@ THEME_RULES = [
     ("环保/保护", ["环保", "保护"]),
     ("资源", ["资源"]),
 
-    # 【三、宽基】（全部在步骤 4 整体剔除，合并为一条即可）
+    # 【三、宽基】（全部会在步骤 4 整体剔除）
     # 这些关键词的作用是把宽基准确识别出来，避免它们落入“其他”而躲过剔除。
-    # 因为最终会被 REMOVE_BROAD_CATEGORIES 整体删除，所以无需再细分成多个子类。
+    # 因为最终会被 REMOVE_BROAD_CATEGORIES 整体删除。
     # 注意：必须放在所有行业/主题规则之后，防止 “创业板人工智能” 这类行业主题
     #       被 “创业板” 截胡（行业规则在前，会先命中）。
     ("宽基", [
@@ -269,9 +269,8 @@ def filter_by_turnover(df):
     """
     对份额 < TURNOVER_CHECK_SHARES_YI 亿份的基金，查询成交额，
     剔除成交额 < MIN_TURNOVER_YI 亿元的标的。
-    数据源优先级：akshare 新浪接口（fund_etf_category_sina）
-                 → 东方财富行情 API 直连（push2 系列）。
-    两个源都失败时，明确告警并放弃过滤。
+    数据源：akshare 新浪接口（fund_etf_category_sina）。
+    接口失败或匹配率过低时，明确告警并放弃过滤。
     """
     need_check = df[df["份额_亿份"] < TURNOVER_CHECK_SHARES_YI].copy()
     skip_check = df[df["份额_亿份"] >= TURNOVER_CHECK_SHARES_YI].copy()
@@ -283,54 +282,19 @@ def filter_by_turnover(df):
     print(f"   需检查成交额的标的数：{len(need_check)}")
     need_check["基金代码"] = need_check["基金代码"].astype(str).str.strip()
 
-    turnover_map = None
-
-    # ---------- 数据源 1：akshare 新浪接口（正确的函数名） ----------
+    # 新浪返回列通常为：代码, 名称, 最新价, 涨跌额, 涨跌幅, 买入, 卖出, 昨收,
+    # 今开, 最高, 最低, 成交量, 成交额
+    # 代码列可能带 sh/sz 前缀，需要截掉后 6 位
     try:
         sina_df = ak.fund_etf_category_sina(symbol="ETF基金")
-        # 新浪返回列通常为：代码, 名称, 最新价, 涨跌额, 涨跌幅, 买入, 卖出, 昨收,
-        # 今开, 最高, 最低, 成交量, 成交额
-        # 代码列可能带 sh/sz 前缀，需要截掉后 6 位
         sina_df["代码"] = sina_df["代码"].astype(str).str.strip().str[-6:]
         turnover_map = (sina_df[["代码", "成交额"]]
                         .drop_duplicates("代码")
                         .rename(columns={"代码": "基金代码", "成交额": "成交额_原始"}))
         print(f"   新浪接口成功，返回 {len(turnover_map)} 条")
     except Exception as e:
-        print(f"   新浪接口失败：{type(e).__name__}: {e}")
-
-    # ---------- 数据源 2：东方财富行情 API 直连 ----------
-    if turnover_map is None:
-        try:
-            # 东方财富 ETF 实时行情接口（push2 系列），直接返回 JSON
-            url = "https://push2.eastmoney.com/api/qt/clist/get"
-            params = {
-                "pn": "1", "pz": "5000", "po": "1", "np": "1",
-                "fltt": "2", "invt": "2",
-                "fid": "f3",  # 按涨跌幅排序，无实质影响
-                "fs": "b:MK0021,b:MK0022,b:MK0023,b:MK0024",  # ETF 板块
-                "fields": "f12,f14,f6",  # f12=代码, f14=名称, f6=成交额(元)
-            }
-            resp = requests.get(url, params=params, timeout=10,
-                                headers={"User-Agent": "Mozilla/5.0",
-                                         "Referer": "https://quote.eastmoney.com/"})
-            data = resp.json()
-            items = data.get("data", {}).get("diff", [])
-            if not items:
-                raise ValueError("东财 API 返回 data.diff 为空")
-            em_df = pd.DataFrame(items)
-            em_df = em_df.rename(columns={"f12": "基金代码", "f6": "成交额_原始"})
-            em_df["基金代码"] = em_df["基金代码"].astype(str).str.strip()
-            turnover_map = (em_df[["基金代码", "成交额_原始"]]
-                            .drop_duplicates("基金代码"))
-            print(f"   东财 API 直连成功，返回 {len(turnover_map)} 条")
-        except Exception as e:
-            print(f"   东财 API 直连失败：{type(e).__name__}: {e}")
-
-    # ---------- 两个源都失败：明确告警 ----------
-    if turnover_map is None:
-        print("   [警告] 成交额数据源全部失败，本次成交额过滤未生效！"
-              "低流动性标的可能混入结果，请检查网络后重跑。")
+        print(f"   [警告] 新浪接口失败：{type(e).__name__}: {e}，"
+              f"本次成交额过滤未生效！低流动性标的可能混入结果，请检查网络后重跑。")
         return df
 
     # ---------- 合并与匹配率保护 ----------
@@ -342,8 +306,8 @@ def filter_by_turnover(df):
               f"代码格式可能不匹配，放弃成交额过滤")
         return df
 
-    # ---------- 单位归一化：两个源的成交额单位可能不同 ----------
-    # 新浪接口的成交额通常已经是「元」或「万元」，东财 f6 明确为「元」。
+    # ---------- 单位归一化 ----------
+    # 新浪接口的成交额通常是「万元」。
     # 保险做法：先按「元」处理，如果整体中位数明显偏小（< 1e4），再按「万元」换算。
     vals = pd.to_numeric(need_check["成交额_原始"], errors="coerce")
     if vals.median() < 1e4:  # 若中位数 < 1万元，说明单位可能是「万元」
@@ -359,9 +323,10 @@ def filter_by_turnover(df):
     print(f"   成交额过滤：{before} 条 → {after} 条"
           f"（剔除 {before - after} 条成交额不足 {MIN_TURNOVER_YI} 亿的标的）")
 
-    result = pd.concat([skip_check, need_check.drop(columns=["成交额_原始", "成交额_亿元"])],
-                       ignore_index=True)
-    return result
+    return pd.concat(
+        [skip_check, need_check.drop(columns=["成交额_原始", "成交额_亿元"])],
+        ignore_index=True,
+    )
 
 
 def classify(name):
@@ -439,7 +404,7 @@ def run_review(snapshot_date: date):
 
 
 # ============================================================
-# 阶段 2：历史份额增量更新（原 ETF_GJD.py 逻辑）
+# 阶段 2：历史份额增量更新
 # ============================================================
 def load_codes_from_csv(path: str) -> dict[str, str]:
     """按 CSV 格式读取：基金代码,场内简称,跟踪指数,份额（亿份）
@@ -462,27 +427,20 @@ def load_codes_from_csv(path: str) -> dict[str, str]:
                 return {}
 
             header_clean = [str(h).replace("\ufeff", "").strip() for h in header]
-            print(f"{path} 表头：{header_clean}")
 
             def find_idx(*names):
-                for n in names:
-                    if n in header_clean:
-                        return header_clean.index(n)
-                return None
+                return next((header_clean.index(n) for n in names if n in header_clean), None)
 
+            # 代码列：优先“基金代码/代码/code”，缺省按第 1 列
             code_idx = find_idx("基金代码", "代码", "code")
-            name_idx = find_idx("场内简称", "基金名称", "名称", "基金简称", "简称")
-
             if code_idx is None:
                 code_idx = 0
                 print(f"{path} 未找到代码列，按第 1 列读取。")
-            if name_idx is None:
-                name_idx = 1 if len(header_clean) > 1 else None
-                if name_idx is not None:
-                    print(f"{path} 未找到名称列，按第 2 列读取。")
-
-            print(f"{path} 使用：代码列='{header_clean[code_idx] if code_idx < len(header_clean) else '?'}'，"
-                  f"名称列='{(header_clean[name_idx] if name_idx is not None and name_idx < len(header_clean) else '无')}'")
+            # 名称列：优先“场内简称”等常见字段，缺省按第 2 列
+            name_idx = find_idx("场内简称", "基金名称", "名称", "基金简称", "简称")
+            if name_idx is None and len(header_clean) > 1:
+                name_idx = 1
+                print(f"{path} 未找到名称列，按第 2 列读取。")
 
             for row in reader:
                 if not row or code_idx >= len(row):
@@ -490,9 +448,7 @@ def load_codes_from_csv(path: str) -> dict[str, str]:
                 nc = normalize_code(row[code_idx])
                 if not nc:
                     continue
-                nm = ""
-                if name_idx is not None and name_idx < len(row):
-                    nm = str(row[name_idx]).strip()
+                nm = str(row[name_idx]).strip() if name_idx is not None and name_idx < len(row) else ""
                 if nc not in result or (nm and not result[nc]):
                     result[nc] = nm
     except Exception as e:
@@ -508,30 +464,28 @@ def gather_codes() -> dict[str, str]:
 
     名称优先级：CSV 名称 > 空字符串（宽基名称由用户在 js 中维护）。
     """
-    csv_map = load_codes_from_csv(CSV_PATH)
     ordered: dict[str, str] = {}
+    csv_map = load_codes_from_csv(CSV_PATH)
 
+    # 先铺内置宽基（名称留空，由 js 维护）
     for c in BROAD_BASE_CODES:
         nc = normalize_code(c)
         if not nc or nc in ordered:
             continue
         try:
             exchange_of(nc)
+            ordered[nc] = ""
         except ValueError:
             print(f"跳过无法识别的交易所代码：{nc}")
-            continue
-        ordered[nc] = ""
 
+    # 再叠加 CSV 中的行业主题；若 CSV 提供了名称则覆盖空名
     for nc, nm in csv_map.items():
         try:
             exchange_of(nc)
         except ValueError:
             print(f"跳过无法识别的交易所代码：{nc}")
             continue
-        if nc in ordered:
-            if nm:
-                ordered[nc] = nm
-        else:
+        if nc not in ordered or nm:
             ordered[nc] = nm
 
     return ordered
@@ -568,12 +522,8 @@ def load_existing_js(path: str) -> dict:
 def merge_series(existing_pts: list, new_pts: list) -> list:
     """合并旧数据和新抓取的数据，按日期去重，保留 2 位小数。"""
     merged: dict[str, dict] = {}
-    for p in existing_pts:
-        d, v = p.get("date"), p.get("shares_yi")
-        if not d or v is None or pd.isna(v):
-            continue
-        merged[d] = {"date": d, "shares_yi": round(float(v), 2)}
-    for p in new_pts:
+    # 旧数据在前、新数据在后：同日以新抓取为准
+    for p in existing_pts + new_pts:
         d, v = p.get("date"), p.get("shares_yi")
         if not d or v is None or pd.isna(v):
             continue
@@ -699,7 +649,7 @@ def run_update(snapshot_date: date):
     all_dates_broad = [d.strftime("%Y-%m-%d") for d in broad_trade_dates]
     all_dates_sector = [d.strftime("%Y-%m-%d") for d in sector_trade_dates]
 
-    # 读旧文件（两个）
+    # 读旧文件（两个），把 meta / series 合并到一起处理
     existing_broad = load_existing_js(BROAD_JS)
     existing_sector = load_existing_js(SECTOR_JS)
     old_meta = {**(existing_broad.get("meta") or {}), **(existing_sector.get("meta") or {})}
@@ -708,16 +658,16 @@ def run_update(snapshot_date: date):
     # 重建 meta（只保留本次目标代码；宽基名称保留旧值，行业主题用 CSV 名称）
     meta: dict[str, dict] = {}
     for code in target_codes:
-        csv_name = name_map.get(code) or ""
-        old_entry = old_meta.get(code)
+        old_entry = old_meta.get(code) or {}
         old_name = str(old_entry.get("name") or "") if isinstance(old_entry, dict) else ""
-        meta[code] = {"name": csv_name or old_name or ""}
+        # 名称优先级：CSV 名称 > 旧 js 名称 > 空
+        meta[code] = {"name": name_map.get(code) or old_name or ""}
         series.setdefault(code, [])
 
     # 待观察代码：保留 meta 和 series（用于画曲线），但不参与历史补齐
     watch_codes_clean = [nc for nc in (normalize_code(c) for c in WATCH_CODES) if nc]
     for nc in watch_codes_clean:
-        old_entry = old_meta.get(nc)
+        old_entry = old_meta.get(nc) or {}
         old_name = str(old_entry.get("name") or "") if isinstance(old_entry, dict) else ""
         meta[nc] = {"name": old_name or nc}
         series.setdefault(nc, [])
@@ -757,16 +707,14 @@ def run_update(snapshot_date: date):
     # ---- 深交所优先 ----
     if szse_missing:
         print(f"\n[深交所] 批量抓取 {len(szse_missing)} 只代码……")
-        szse_new = fetch_szse_batch(szse_missing)
-        for code, pts in szse_new.items():
+        for code, pts in fetch_szse_batch(szse_missing).items():
             series[code] = merge_series(series.get(code, []), pts)
             print(f"  {code}：本次新增 {len(pts)} 个点，合并后 {len(series[code])} 个。")
 
     # ---- 上交所 ----
     if sse_missing:
         print(f"\n[上交所] 批量抓取 {len(sse_missing)} 只代码……")
-        sse_new = fetch_sse_batch(sse_missing)
-        for code, pts in sse_new.items():
+        for code, pts in fetch_sse_batch(sse_missing).items():
             series[code] = merge_series(series.get(code, []), pts)
             print(f"  {code}：本次新增 {len(pts)} 个点，合并后 {len(series[code])} 个。")
 
