@@ -145,6 +145,118 @@
     border-color: transparent transparent #16233a transparent;
   }
 
+  /* ===== 顶部双看板排版（公告 + 排行） ===== */
+  .top-dashboard {
+    display: grid;
+    grid-template-columns: 1.1fr 1.5fr;
+    gap: 16px;
+    margin-bottom: 20px;
+  }
+  .announcement-board,
+  .leaderboard-board {
+    background: linear-gradient(160deg, var(--panel-2), var(--panel));
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    padding: 12px 16px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, .25);
+    overflow: hidden;
+  }
+  .announcement-board .ab-title,
+  .leaderboard-board .ab-title {
+    font-size: 13px;
+    font-weight: 600;
+    color: #c6d4e8;
+    margin-bottom: 8px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .announcement-board .ab-title::before,
+  .leaderboard-board .ab-title::before {
+    content: "";
+    width: 3px;
+    height: 12px;
+    border-radius: 2px;
+    background: #38bdf8;
+    display: inline-block;
+  }
+  .announcement-board .ab-sub,
+  .leaderboard-board .ab-sub {
+    font-size: 11px;
+    color: var(--muted);
+    font-weight: 400;
+  }
+  .announcement-board table,
+  .leaderboard-board table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 11.5px;
+  }
+  .announcement-board th,
+  .announcement-board td,
+  .leaderboard-board th,
+  .leaderboard-board td {
+    text-align: left;
+    padding: 6px 6px;
+    border-bottom: 1px solid rgba(34, 49, 77, 0.4);
+    white-space: nowrap;
+  }
+  .announcement-board th,
+  .leaderboard-board th {
+    color: var(--muted);
+    font-weight: 500;
+    font-size: 11px;
+    user-select: none;
+  }
+  /* 排行榜表头排序样式 */
+  .leaderboard-board th.sortable {
+    cursor: pointer;
+    transition: color 0.15s;
+  }
+  .leaderboard-board th.sortable:hover {
+    color: var(--text);
+  }
+  .leaderboard-board th.active-sort {
+    color: #38bdf8;
+    font-weight: 600;
+  }
+  .leaderboard-board th .sort-icon {
+    font-size: 9px;
+    margin-left: 2px;
+    opacity: 0.6;
+  }
+  .leaderboard-board th.active-sort .sort-icon {
+    opacity: 1;
+  }
+
+  .announcement-board td,
+  .leaderboard-board td { color: var(--text); }
+  .announcement-board tr:last-child td,
+  .leaderboard-board tr:last-child td { border-bottom: none; }
+
+  .ab-tag {
+    display: inline-block;
+    padding: 1px 6px;
+    border-radius: 999px;
+    font-size: 10.5px;
+    line-height: 1.5;
+  }
+  .ab-tag.split {
+    background: rgba(251, 191, 36, 0.15);
+    color: #fbbf24;
+    border: 1px solid rgba(251, 191, 36, 0.3);
+  }
+  .ab-tag.merge {
+    background: rgba(56, 189, 248, 0.15);
+    color: #38bdf8;
+    border: 1px solid rgba(56, 189, 248, 0.3);
+  }
+
+  /* 红涨绿跌 */
+  .text-up { color: #f87171 !important; }
+  .text-down { color: #34d399 !important; }
+  .text-flat { color: var(--muted) !important; }
+
   /* ===== 多图表网格：Web 端一行 2 个，H5 端一行 1 个 ===== */
   .charts-grid {
     display: grid;
@@ -160,7 +272,7 @@
     box-shadow: 0 8px 24px rgba(0, 0, 0, .25);
     display: flex;
     flex-direction: column;
-    min-width: 0;            /* 防止 grid 子项被内容撑破 */
+    min-width: 0;
   }
 
   .chart-header {
@@ -176,7 +288,6 @@
     color: #c6d4e8;
   }
 
-  /* 颜色图例：每条 ETF 曲线对应一个色点 */
   .chart-legend {
     display: flex;
     flex-wrap: wrap;
@@ -200,7 +311,6 @@
     flex: 0 0 auto;
   }
 
-  /* 组内切换 Tabs */
   .group-tabs {
     display: flex;
     background: rgba(11, 18, 32, 0.6);
@@ -228,14 +338,12 @@
     box-shadow: 0 2px 6px rgba(56, 189, 248, 0.3);
   }
 
-  /* 单个图表容器 */
   .chart-body {
     height: 280px;
     width: 100%;
     position: relative;
     overflow: hidden;
   }
-  /* 隐藏 Logo */
   #tv-attr-logo, a[href*="tradingview.com"] { display: none !important; }
 
   /* 悬浮窗 */
@@ -257,30 +365,28 @@
 
   /* ===== H5 端：一行一个卡片 + 尺寸微调 ===== */
   @media (max-width: 768px) {
-    body {
-      padding: 16px 12px 40px;
-    }
-
+    body { padding: 16px 12px 40px; }
     header { margin-bottom: 16px; }
     header h1 { font-size: 20px; }
     header p { font-size: 12.5px; }
-
-    .toolbar {
-      gap: 10px;
-      margin-bottom: 14px;
-    }
+    .toolbar { gap: 10px; margin-bottom: 14px; }
     .toolbar button { padding: 6px 12px; }
-    .category-group { margin-left: 0; }   /* H5 不靠右，自然换行 */
+    .category-group { margin-left: 0; }
+
+    .top-dashboard {
+      grid-template-columns: 1fr;
+      gap: 12px;
+    }
+    .announcement-board, .leaderboard-board {
+      padding: 10px 12px;
+      overflow-x: auto;
+    }
 
     .charts-grid {
       grid-template-columns: minmax(0, 1fr);
       gap: 12px;
     }
-
-    .chart-card {
-      padding: 12px;
-      border-radius: 12px;
-    }
+    .chart-card { padding: 12px; border-radius: 12px; }
     .chart-header { flex-wrap: wrap; }
     .group-tabs { overflow-x: auto; max-width: 100%; }
     .chart-body { height: 240px; }
@@ -298,13 +404,11 @@
   </header>
 
   <div class="toolbar">
-    <!-- 模式切换和感叹号提示 -->
     <div class="mode-wrapper">
       <div class="group">
         <button class="mode-btn active" data-mode="abs">绝对份额</button>
         <button class="mode-btn" data-mode="norm">归一化对比</button>
       </div>
-
       <div class="info-tooltip">
         <span class="icon">!</span>
         <span class="tooltip-text">绝对份额：看真实规模变动<br>归一化对比：看相对涨跌趋势</span>
@@ -319,11 +423,15 @@
       <button class="range-btn" data-months="0">全部</button>
     </div>
 
-    <!-- 分类切换 -->
     <div class="group category-group">
       <button class="category-btn active" data-category="broad">宽基</button>
-      <button class="category-btn" data-category="sector">行业主题</button>
+      <button class="category-btn" data-category="sector">行业</button>
     </div>
+  </div>
+
+  <div class="top-dashboard">
+    <div id="announcement-board" class="announcement-board" style="display: none;"></div>
+    <div id="leaderboard-board" class="leaderboard-board" style="display: none;"></div>
   </div>
 
   <div class="charts-grid" id="charts-grid"></div>
@@ -331,11 +439,9 @@
 
 <div id="tooltip" class="lw-tooltip"></div>
 
-<!-- 动态数据（由 etf_pipeline.py 生成，按宽基/行业主题拆分） -->
 <script src="etf_share_data_broad.js"></script>
 <script src="etf_share_data_sector.js"></script>
 <script>
-  // 合并两个数据文件为统一的 DATA 对象，后续渲染逻辑无需感知拆分
   window.__ETF_SHARE_DATA__ = {
     meta:   { ...(window.__ETF_SHARE_BROAD__?.meta   || {}),
               ...(window.__ETF_SHARE_SECTOR__?.meta  || {}) },
@@ -344,21 +450,13 @@
   };
 </script>
 
-<!-- 静态分组配置 -->
 <script>
   window.__ETF_GROUPS__ = [
-    // ===== 宽基 =====
     { "name": "科创板50",         "codes": ["588080","588000"],           "category": "broad" },
     { "name": "沪深300/上证50",  "codes": ["510300", "510310"], "category": "broad" },
     { "name": "创业板/上证50",           "codes": ["159915", "159952","159949","510050"], "category": "broad" },
     { "name": "中证系列",          "codes": ["510500","512100","563300"],"category": "broad" },
-
-    // ===== 行业主题 =====
-    // 新上市 ETF 待观察：放在行业主题最顶端，只画当日份额，人工确认后再转入正式分组。
-    // 对应 Python 端的 WATCH_CODES，两处需同步维护。
-    // 当前无待观察标的时 codes 为空，前端会自动隐藏该分组。
     { "name": "🆕 待观察", "codes": [], "category": "sector" },
-
     { "name": "AI硬件", "codes": ["159516","515880"], "category": "sector" },
     { "name": "AI应用",       "codes": ["159852","159869","513330"], "category": "sector" },
     { "name": "机器人/AI/军工龙头",     "codes": ["562500","159819","512710"], "category": "sector" },
@@ -366,9 +464,7 @@
     { "name": "电相关",       "codes": ["159611","159326","159755","159870"], "category": "sector" },
     { "name": "消费",   "codes": ["159865","159732","512690"], "category": "sector" },
     { "name": "有色金属/黄金",   "codes": ["512400","518880"], "category": "sector" },
-    { "name": "券商/银行",       "codes": ["512000","512800"], "category": "sector" },
-
-    { "name": "红利低波",   "codes": ["512890"], "category": "sector" },
+    { "name": "券商/银行/红利低波",       "codes": ["512000","512800","512890"], "category": "sector" },
   ];
 </script>
 
@@ -379,20 +475,36 @@
   const DATA = window.__ETF_SHARE_DATA__;
   const gridEl = document.getElementById("charts-grid");
 
-  // 基础数据校验
   if (!DATA || !DATA.series || !Object.keys(DATA.series).length) {
     gridEl.outerHTML = '<div class="empty">未找到数据文件，或数据为空。</div>';
     return;
   }
 
-  // === 从 HTML 中读取分组配置 ===
   const GROUPS = window.__ETF_GROUPS__ || [];
   if (!GROUPS.length) {
     gridEl.outerHTML = '<div class="empty">HTML 中未配置 __ETF_GROUPS__ 分组信息。</div>';
     return;
   }
 
-  // 从外部数据源读取名称映射 (匹配 meta 结构)
+  const SPLIT_EVENTS = {
+    "510300": [{ date: "2021-02-24", ratio: "1:3", type: "split" }],
+    "588000": [{ date: "2020-11-09", ratio: "1:0.6945", type: "merge" }],
+    "588080": [{ date: "2020-11-09", ratio: "1:0.7006", type: "merge" }],
+    "510310": [{ date: "2024-09-20", ratio: "1:0.4998", type: "merge" }],
+    "510500": [{ date: "2022-08-26", ratio: "1:1.1454", type: "split" }],
+    "512170": [{ date: "2021-02-24", ratio: "1:3", type: "split" }],
+    "512710": [{ date: "2021-03-19", ratio: "1:2", type: "split" }],
+    "512690": [{ date: "2021-05-14", ratio: "1:2", type: "split" }],
+    "512890": [{ date: "2021-10-22", ratio: "1:2", type: "split" }],
+    "512800": [{ date: "2025-07-04", ratio: "1:2", type: "split" }],
+    "512000": [{ date: "2025-08-01", ratio: "1:2", type: "split" }],
+    "159516": [{ date: "2026-07-09", ratio: "1:2", type: "split" }],
+    "515880": [
+      { date: "2026-02-03", ratio: "1:3", type: "split" },
+      { date: "2026-07-03", ratio: "1:2", type: "split" },
+    ],
+  };
+
   const NAME_MAP = {};
   if (DATA.meta) {
     for (const code in DATA.meta) {
@@ -402,23 +514,12 @@
     }
   }
 
-  // === 组内轮换调色板：高对比度亮色（专为深色背景优化，避免融色） ===
   const PALETTE = [
-    "#38bdf8", // 亮天蓝
-    "#fbbf24", // 亮琥珀
-    "#34d399", // 亮翠绿
-    "#fb7185", // 亮玫瑰红
-    "#c084fc", // 亮紫
-    "#fb923c", // 亮橙
-    "#a3e635", // 荧光黄绿
-    "#22d3ee", // 亮青
-    "#f472b6", // 亮粉
-    "#2dd4bf", // 亮青绿
-    "#facc15", // 亮黄
-    "#818cf8", // 亮靛蓝
+    "#38bdf8", "#fbbf24", "#34d399", "#fb7185",
+    "#c084fc", "#fb923c", "#a3e635", "#22d3ee",
+    "#f472b6", "#2dd4bf", "#facc15", "#818cf8",
   ];
 
-  // === 全局配色表：所有分组统一顺序分配 ===
   const CODE_COLOR = (function () {
     const m = {};
     let i = 0;
@@ -426,6 +527,15 @@
       g.codes.forEach((c) => {
         if (m[c] === undefined) m[c] = PALETTE[i++ % PALETTE.length];
       });
+    });
+    return m;
+  })();
+
+  const CODE_CATEGORY = (function () {
+    const m = {};
+    GROUPS.forEach((g) => {
+      const cat = g.category || "broad";
+      (g.codes || []).forEach((c) => { m[c] = cat; });
     });
     return m;
   })();
@@ -440,8 +550,6 @@
   const sortByDate = (arr) => arr.slice().sort((a, b) => a.date.localeCompare(b.date));
   const shortName = (code) => (NAME_MAP[code] || code).replace("ETF", "");
 
-  // 分组是否有可渲染的数据：codes 非空且至少一只在 series 里有数据点。
-  // 用于自动隐藏「🆕 待观察」这类当前无内容的空分组。
   const groupHasData = (g) =>
     Array.isArray(g.codes) &&
     g.codes.length > 0 &&
@@ -467,26 +575,220 @@
     return null;
   }
 
-  // ==== 缓存静态 DOM，避免高频回调中重复查询 ====
   const rangeBtns    = Array.from(document.querySelectorAll(".range-btn"));
   const modeBtns     = Array.from(document.querySelectorAll(".mode-btn"));
   const categoryBtns = Array.from(document.querySelectorAll(".category-btn"));
 
-  // 全局状态
   let currentMode = "abs";
+  let currentCategory = "broad";
   let chartInstances = [];
   let isSyncingTime = false;
   let isSyncingCrosshair = false;
-  let currentRangeMonths = 6; // 默认 6M
+  let currentRangeMonths = 6;
 
-  // 收集所有真实的交易日
+  // 排行榜排序状态
+  let currentSortKey = "changeMonth"; // 默认按月变化
+  let currentSortOrder = "desc";      // 默认降序
+
   let allRealDates = [];
   GROUPS.forEach(g => g.codes.forEach(c => {
     if (DATA.series[c]) DATA.series[c].forEach(p => allRealDates.push(p.date));
   }));
   allRealDates = [...new Set(allRealDates)].sort();
 
-  // === 1. 渲染 DOM 容器 ===
+  function renderAnnouncementBoard(category) {
+    const board = document.getElementById("announcement-board");
+    if (!board) return;
+
+    const rows = [];
+    Object.entries(SPLIT_EVENTS).forEach(([code, events]) => {
+      if (CODE_CATEGORY[code] !== category) return;
+
+      const pts = sortByDate(DATA.series[code] || []);
+      const firstDate = pts.length ? pts[0].date : null;
+      const lastDate = pts.length ? pts[pts.length - 1].date : null;
+
+      events.forEach((ev) => {
+        const outOfRange =
+          !pts.length ||
+          !firstDate ||
+          ev.date < firstDate ||
+          (lastDate && ev.date > lastDate);
+        if (outOfRange) {
+          rows.push({ ...ev, code, name: NAME_MAP[code] || code });
+        }
+      });
+    });
+
+    if (!rows.length) {
+      board.style.display = "none";
+      return;
+    }
+
+    rows.sort((a, b) => a.date.localeCompare(b.date));
+    const typeLabel = (ev) => ev.type === "split" ? "拆分" : "合并";
+    const catLabel = category === "sector" ? "行业" : "宽基";
+
+    board.innerHTML = `
+      <div class="ab-title">
+        历史拆分 / 合并
+        <span class="ab-sub">（${catLabel} · 早于现有数据，直接公示）</span>
+      </div>
+      <table>
+        <thead>
+          <tr><th>日期</th><th>代码</th><th>名称</th><th>类型</th><th>比例</th></tr>
+        </thead>
+        <tbody>
+          ${rows.map((r) => `
+            <tr>
+              <td>${r.date}</td><td>${r.code}</td><td>${r.name}</td>
+              <td><span class="ab-tag ${r.type}">${typeLabel(r)}</span></td><td>${r.ratio}</td>
+            </tr>`).join("")}
+        </tbody>
+      </table>
+    `;
+    board.style.display = "block";
+  }
+
+  // === 份额排行榜：点击表头自动排序，取前五 ===
+  function renderLeaderboard(category) {
+    const board = document.getElementById("leaderboard-board");
+    if (!board) return;
+
+    const codesInCategory = new Set();
+    GROUPS.forEach(g => {
+      if ((g.category || "broad") === category) {
+        g.codes.forEach(c => codesInCategory.add(c));
+      }
+    });
+
+    const items = [];
+    codesInCategory.forEach(code => {
+      const pts = DATA.series[code] || [];
+      if (pts.length > 0) {
+        const lastPt = pts[pts.length - 1];
+        const lastDate = new Date(lastPt.date);
+
+        // 周变化
+        const targetDateWeek = new Date(lastDate);
+        targetDateWeek.setDate(targetDateWeek.getDate() - 7);
+        let pastPtWeek = pts[0];
+        for (let i = pts.length - 1; i >= 0; i--) {
+          if (new Date(pts[i].date) <= targetDateWeek) {
+            pastPtWeek = pts[i];
+            break;
+          }
+        }
+        const changeWeek = pastPtWeek.shares_yi
+          ? ((lastPt.shares_yi - pastPtWeek.shares_yi) / pastPtWeek.shares_yi) * 100
+          : 0;
+
+        // 月变化 (30天)
+        const targetDateMonth = new Date(lastDate);
+        targetDateMonth.setDate(targetDateMonth.getDate() - 30);
+        let pastPtMonth = pts[0];
+        for (let i = pts.length - 1; i >= 0; i--) {
+          if (new Date(pts[i].date) <= targetDateMonth) {
+            pastPtMonth = pts[i];
+            break;
+          }
+        }
+        const changeMonth = pastPtMonth.shares_yi
+          ? ((lastPt.shares_yi - pastPtMonth.shares_yi) / pastPtMonth.shares_yi) * 100
+          : 0;
+
+        items.push({
+          code: code,
+          name: NAME_MAP[code] || code,
+          value: lastPt.shares_yi,
+          changeWeek: changeWeek,
+          changeMonth: changeMonth
+        });
+      }
+    });
+
+    if (!items.length) {
+      board.style.display = "none";
+      return;
+    }
+
+    // 排序逻辑
+    items.sort((a, b) => {
+      let valA = a[currentSortKey];
+      let valB = b[currentSortKey];
+      if (currentSortOrder === "desc") {
+        return valB - valA;
+      } else {
+        return valA - valB;
+      }
+    });
+
+    // 直接取前五名
+    const displayItems = items.slice(0, 5);
+
+    // 排序表头图标辅助函数
+    const getSortIcon = (key) => {
+      if (currentSortKey !== key) return '<span class="sort-icon">↕</span>';
+      return currentSortOrder === 'desc' ? '<span class="sort-icon">▼</span>' : '<span class="sort-icon">▲</span>';
+    };
+    const getSortClass = (key) => currentSortKey === key ? 'active-sort' : '';
+
+    board.innerHTML = `
+      <div class="ab-title">
+        ${category === "broad" ? "宽基" : "行业"}份额变化排行
+        <span class="ab-sub">（点击表头排序 · 前5名）</span>
+      </div>
+      <table>
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>代码</th>
+            <th>名称</th>
+            <th class="sortable ${getSortClass('value')}" data-sort="value" style="text-align:right">份额(亿) ${getSortIcon('value')}</th>
+            <th class="sortable ${getSortClass('changeMonth')}" data-sort="changeMonth" style="text-align:right">月变化 ${getSortIcon('changeMonth')}</th>
+            <th class="sortable ${getSortClass('changeWeek')}" data-sort="changeWeek" style="text-align:right">周变化 ${getSortIcon('changeWeek')}</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${displayItems.map((item, idx) => {
+            const cwStr = (item.changeWeek > 0 ? "+" : "") + item.changeWeek.toFixed(2) + "%";
+            const cwClass = item.changeWeek > 0 ? "text-up" : (item.changeWeek < 0 ? "text-down" : "text-flat");
+
+            const cmStr = (item.changeMonth > 0 ? "+" : "") + item.changeMonth.toFixed(2) + "%";
+            const cmClass = item.changeMonth > 0 ? "text-up" : (item.changeMonth < 0 ? "text-down" : "text-flat");
+
+            return `
+            <tr>
+              <td>${idx + 1}</td>
+              <td>${item.code}</td>
+              <td>${item.name}</td>
+              <td style="text-align:right; font-variant-numeric: tabular-nums;">${fmt(item.value)}</td>
+              <td class="${cmClass}" style="text-align:right; font-variant-numeric: tabular-nums; font-weight: 600;">${cmStr}</td>
+              <td class="${cwClass}" style="text-align:right; font-variant-numeric: tabular-nums;">${cwStr}</td>
+            </tr>`;
+          }).join("")}
+        </tbody>
+      </table>
+    `;
+    board.style.display = "block";
+
+    // 绑定表头点击排序事件
+    board.querySelectorAll('th.sortable').forEach(th => {
+      th.addEventListener('click', () => {
+        const key = th.dataset.sort;
+        if (currentSortKey === key) {
+          // 同一个列，切换升降序
+          currentSortOrder = currentSortOrder === "desc" ? "asc" : "desc";
+        } else {
+          // 不同列，默认降序
+          currentSortKey = key;
+          currentSortOrder = "desc";
+        }
+        renderLeaderboard(currentCategory);
+      });
+    });
+  }
+
   function initDOM() {
     gridEl.innerHTML = GROUPS.map((g, idx) => {
       const legendHtml = g.codes.map(c => `
@@ -506,7 +808,6 @@
       }
 
       const category = g.category || "broad";
-      // 空分组（如暂无新 ETF 的「待观察」）直接隐藏，不占位置
       const displayStyle = groupHasData(g) && category === "broad" ? "flex" : "none";
 
       return `
@@ -524,16 +825,11 @@
     }).join("");
   }
 
-  // === 2. 创建单个图表并绑定交互 ===
   function createChart(containerId, group, groupIdx) {
     const el = document.getElementById(containerId);
     const chart = LightweightCharts.createChart(el, {
       autoSize: true,
-      layout: {
-        background: { type: "solid", color: "transparent" },
-        textColor: "#8ba0bd", fontSize: 11,
-        attributionLogo: false,
-      },
+      layout: { background: { type: "solid", color: "transparent" }, textColor: "#8ba0bd", fontSize: 11, attributionLogo: false },
       grid: { vertLines: { color: "rgba(139,160,189,0.04)" }, horzLines: { color: "rgba(139,160,189,0.04)" } },
       crosshair: {
         mode: LightweightCharts.CrosshairMode.Normal,
@@ -549,13 +845,9 @@
 
     const ctx = {
       chart, group, groupIdx,
-      seriesList: [],
-      seriesByCode: {},
-      timeIndex: {},
-      markerInfo: {},
-      colorMap: buildColorMap(group),
-      tabs: buildTabs(group),
-      visibleCodes: group.codes.slice()
+      seriesList: [], seriesByCode: {}, timeIndex: {}, markerInfo: {},
+      splitMarkers: {}, splitEventMap: {},
+      colorMap: buildColorMap(group), tabs: buildTabs(group), visibleCodes: group.codes.slice()
     };
 
     if (ctx.tabs && ctx.tabs.length > 1) {
@@ -574,11 +866,9 @@
     bindTooltip(ctx, el);
     bindCrosshairSync(ctx);
     bindTimeScaleSync(ctx);
-
     return ctx;
   }
 
-  // === 3. 控制单图内多条线的显示/隐藏 + 刷新极值标记 ===
   function updateGroupVisibility(ctx) {
     const multi = ctx.visibleCodes.length > 1;
     const isNorm = currentMode === "norm";
@@ -588,33 +878,22 @@
       if (!s) return;
 
       s.applyOptions({ visible: ctx.visibleCodes.includes(code) });
-
       const info = ctx.markerInfo[code];
       if (!info) return;
 
       const peakText = isNorm ? "峰值" : (multi ? "峰" : `峰 ${fmt(info.maxVal)}`);
       const lowText  = isNorm ? "低点" : (multi ? "低" : `低 ${fmt(info.lowVal)}`);
 
-      s.setMarkers([
-        {
-          time: info.lowDate,
-          position: "belowBar",
-          color: info.color,
-          shape: "arrowUp",
-          text: lowText,
-        },
-        {
-          time: info.maxDate,
-          position: "aboveBar",
-          color: info.color,
-          shape: "arrowDown",
-          text: peakText,
-        },
-      ]);
+      const markers = [
+        { time: info.lowDate, position: "belowBar", color: info.color, shape: "arrowUp", text: lowText },
+        { time: info.maxDate, position: "aboveBar", color: info.color, shape: "arrowDown", text: peakText },
+        ...(ctx.splitMarkers[code] || []),
+      ];
+
+      s.setMarkers(markers);
     });
   }
 
-  // === 4. 拖拽/缩放时的全局同步 ===
   function bindTimeScaleSync(ctx) {
     ctx.chart.timeScale().subscribeVisibleTimeRangeChange((range) => {
       if (!range || isSyncingTime) return;
@@ -625,9 +904,7 @@
       isSyncingTime = true;
       chartInstances.forEach(otherCtx => {
         if (otherCtx.chart !== ctx.chart) {
-          try {
-            otherCtx.chart.timeScale().setVisibleRange({ from: fromStr, to: toStr });
-          } catch (e) { /* 忽略异常 */ }
+          try { otherCtx.chart.timeScale().setVisibleRange({ from: fromStr, to: toStr }); } catch (e) {}
         }
       });
 
@@ -646,7 +923,6 @@
     });
   }
 
-  // === 5. 十字线同步 ===
   function bindCrosshairSync(ctx) {
     ctx.chart.subscribeCrosshairMove((param) => {
       if (isSyncingCrosshair) return;
@@ -674,12 +950,11 @@
           }
         }
       });
-
       setTimeout(() => { isSyncingCrosshair = false; }, 20);
     });
   }
 
-  // === 6. 悬浮窗（含基金代码） ===
+  // === 悬浮窗 ===
   const tooltipEl = document.getElementById("tooltip");
   function bindTooltip(ctx, chartEl) {
     ctx.chart.subscribeCrosshairMove((param) => {
@@ -698,10 +973,17 @@
 
         hasData = true;
         const nm = NAME_MAP[code] || code;
-        // 名称与代码不同时，名称后追加代码；相同则只显示一次
-        const labelHtml = nm === code
+        let labelHtml = nm === code
           ? `<span class="lw-label">${code}</span>`
           : `<span class="lw-label">${nm}<span class="lw-code">${code}</span></span>`;
+
+        const ev = (ctx.splitEventMap[dateStr] || []).find(e => e.code === code);
+        if (ev) {
+          const isSplit = ev.type === "split";
+          const color = isSplit ? "#fbbf24" : "#38bdf8";
+          const txt = isSplit ? "拆" : "合";
+          labelHtml += ` <span style="color:${color}; font-size:11px; font-weight:700; margin-left:4px;">${txt}(${ev.ratio})</span>`;
+        }
 
         html += `
           <div class="lw-tooltip-row">
@@ -725,7 +1007,6 @@
     chartEl.addEventListener("mouseleave", () => tooltipEl.style.display = "none");
   }
 
-  // === 7. 应用模式与峰值/低点标记（低点自动寻找） ===
   function applyMode(mode) {
     currentMode = mode;
     const isNorm = mode === "norm";
@@ -736,6 +1017,8 @@
       ctx.seriesByCode = {};
       ctx.timeIndex = {};
       ctx.markerInfo = {};
+      ctx.splitMarkers = {};
+      ctx.splitEventMap = {};
 
       const card = document.getElementById(`card-${ctx.groupIdx}`);
       if (card && card.style.display === "none") return;
@@ -768,7 +1051,6 @@
 
         series.setData(chartData);
 
-        // --- 极值计算：峰值与低点均自动寻找 ---
         let maxPt = pts[0];
         let lowPt = pts[0];
 
@@ -784,6 +1066,35 @@
           maxDate: maxPt.date,
           maxVal: maxPt.shares_yi,
         };
+
+        const events = SPLIT_EVENTS[code] || [];
+        ctx.splitMarkers[code] = events
+          .map((ev) => {
+            let alignedDate = null;
+            for (const p of pts) {
+              if (p.date <= ev.date) alignedDate = p.date;
+              else break;
+            }
+            if (!alignedDate) return null;
+
+            if (!ctx.splitEventMap[alignedDate]) ctx.splitEventMap[alignedDate] = [];
+            ctx.splitEventMap[alignedDate].push({
+              code,
+              name: NAME_MAP[code] || code,
+              date: ev.date,
+              ratio: ev.ratio,
+              type: ev.type,
+            });
+
+            return {
+              time: alignedDate,
+              position: ev.type === "split" ? "aboveBar" : "belowBar",
+              color: ev.type === "split" ? "#fbbf24" : "#38bdf8",
+              shape: ev.type === "split" ? "arrowDown" : "arrowUp",
+              text: ev.type === "split" ? "拆" : "合",
+            };
+          })
+          .filter(Boolean);
 
         ctx.seriesList.push(series);
         ctx.seriesByCode[code] = series;
@@ -806,11 +1117,9 @@
     applyRange(currentRangeMonths);
   }
 
-  // === 8. 顶部按钮时间范围同步 ===
   function applyRange(months) {
     currentRangeMonths = months;
 
-    // 强制同步按钮状态，解决切换分类或模式时，事件回调被 isSyncingTime 拦截导致的高亮不同步问题
     rangeBtns.forEach((b) => {
       b.classList.toggle("active", b.dataset.months === String(months));
     });
@@ -838,18 +1147,14 @@
     chartInstances.forEach(ctx => {
       const card = document.getElementById(`card-${ctx.groupIdx}`);
       if (card && card.style.display !== "none") {
-        try {
-          ctx.chart.timeScale().setVisibleRange({ from: fromStr, to: lastDateStr });
-        } catch (e) { /* 忽略异常 */ }
+        try { ctx.chart.timeScale().setVisibleRange({ from: fromStr, to: lastDateStr }); } catch (e) {}
       }
     });
     setTimeout(() => { isSyncingTime = false; }, 100);
   }
 
   rangeBtns.forEach((btn) => {
-    btn.addEventListener("click", () => {
-      applyRange(parseInt(btn.dataset.months, 10));
-    });
+    btn.addEventListener("click", () => { applyRange(parseInt(btn.dataset.months, 10)); });
   });
 
   modeBtns.forEach((btn) => {
@@ -859,21 +1164,22 @@
     });
   });
 
-  // === 9. 分类切换（包含按需懒加载初始化） ===
   categoryBtns.forEach((btn) => {
     btn.addEventListener("click", () => {
       if (btn.classList.contains("active")) return;
-
       categoryBtns.forEach(b => b.classList.remove("active"));
       btn.classList.add("active");
 
       const category = btn.dataset.category;
+      currentCategory = category;
+
+      renderAnnouncementBoard(category);
+      renderLeaderboard(category);
 
       document.querySelectorAll(".chart-card").forEach(card => {
         const idx = parseInt(card.id.replace("card-", ""), 10);
         const g = GROUPS[idx];
 
-        // 空分组永远隐藏：不显示、也不创建图表（避免切到 sector 时冒出空卡片）
         if (!groupHasData(g)) {
           card.style.display = "none";
           return;
@@ -881,7 +1187,6 @@
 
         if (card.dataset.category === category) {
           card.style.display = "flex";
-
           const isInit = chartInstances.some(ctx => ctx.groupIdx === idx);
           if (!isInit) {
             const ctx = createChart(`chart-${idx}`, g, idx);
@@ -892,18 +1197,16 @@
         }
       });
 
-      setTimeout(() => {
-        applyMode(currentMode);
-      }, 50);
+      setTimeout(() => { applyMode(currentMode); }, 50);
     });
   });
 
-  // === 10. 启动 ===
   initDOM();
+  renderAnnouncementBoard("broad");
+  renderLeaderboard("broad");
 
   GROUPS.forEach((g, idx) => {
     const category = g.category || "broad";
-    // 只初始化有数据的宽基分组；空分组不创建图表实例
     if (category === "broad" && groupHasData(g)) {
       const ctx = createChart(`chart-${idx}`, g, idx);
       chartInstances.push(ctx);
