@@ -743,3 +743,74 @@ body.theme-dark .note-bar {
 @media (max-width: 768px) {
   footer { font-size: 10px; margin-top: 12px; padding: 6px 0; }
 }
+
+/* =========================================================
+   7. 品牌 Logo 与主题按钮 (全局通用 - 无背景框版)
+   ========================================================= */
+
+/* 品牌 Logo 组合 */
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  text-decoration: none;
+}
+.brand-logo {
+  width: 32px;          /* 稍微缩小了一点，显得更精致 */
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  /* 去掉了 background, border, box-shadow */
+  transition: all 0.3s ease;
+}
+.brand-logo svg {
+  width: 26px;
+  height: 26px;
+  stroke: var(--accent);
+  fill: none;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  transition: all 0.3s ease;
+}
+/* 鼠标悬浮时只放大一点点，不再有框 */
+.brand:hover .brand-logo {
+  transform: scale(1.1);
+}
+.brand h1, .brand-title {
+  font-size: 24px;
+  color: var(--text);
+  margin: 0;
+  letter-spacing: 1px;
+  font-weight: 700;
+}
+
+/* 通用方形主题切换按钮 */
+.theme-btn {
+  background: transparent; /* 背景透明 */
+  border: none;            /* 去掉边框 */
+  color: var(--muted);     /* 默认颜色柔和一点 */
+  padding: 8px 10px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 18px;         /* 稍微放大 emoji，不需要文字框 */
+  line-height: 1;
+  transition: all 0.2s;
+}
+.theme-btn:hover {
+  background: var(--panel-2); /* 悬浮时给一点点极弱的背景色反馈 */
+  color: var(--text);
+}
+
+/* 让雷达扫描或莫比乌斯环缓慢旋转（可选） */
+@keyframes logo-pulse {
+  0% { transform: scale(1); filter: drop-shadow(0 0 0px var(--accent)); }
+  50% { transform: scale(1.05); filter: drop-shadow(0 0 6px var(--accent)); }
+  100% { transform: scale(1); filter: drop-shadow(0 0 0px var(--accent)); }
+}
+
+/* 页面一加载就自动播放 */
+.brand-logo svg {
+  animation: logo-pulse 3s ease-in-out infinite;
+}
