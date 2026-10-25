@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>数据看板中心</title>
+  <link rel="stylesheet" href="./common/common.css">
+  <style>
+    /* 导航页专属样式 */
+    .nav-container {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      padding: 20px;
+    }
+    .nav-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      width: 100%;
+      max-width: 800px;
+      margin-bottom: 40px;
+    }
+    .nav-header h1 {
+      font-size: 28px;
+      color: var(--text);
+      margin: 0;
+    }
+    .nav-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      gap: 20px;
+      width: 100%;
+      max-width: 800px;
+    }
+    .nav-card {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 24px;
+      text-decoration: none;
+      color: var(--text);
+      transition: transform 0.2s, box-shadow 0.2s;
+      display: flex;
+      flex-direction: column;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+    }
+    .nav-card:hover {
+      transform: translateY(-4px);
+      box-shadow: 0 8px 24px rgba(0,0,0,0.15);
+      border-color: var(--accent);
+    }
+    .nav-card h2 {
+      margin: 0 0 10px 0;
+      font-size: 18px;
+      color: var(--accent);
+    }
+    .nav-card p {
+      margin: 0;
+      font-size: 13.5px;
+      color: var(--muted);
+      line-height: 1.6;
+    }
+    /* 按钮样式 */
+    .theme-btn {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      color: var(--text);
+      padding: 8px 16px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 14px;
+      transition: all 0.2s;
+    }
+    .theme-btn:hover {
+      background: var(--panel-2);
+      border-color: var(--accent);
+    }
+  </style>
+</head>
+<body class="theme-dark"> <!-- 默认深色，JS 会接管 -->
+
+  <div class="nav-container">
+    <div class="nav-header">
+      <h1>📊 数据中心</h1>
+      <button id="themeToggle" class="theme-btn">切换主题</button>
+    </div>
+
+    <div class="nav-grid">
+      <a href="./etf/etf_share.html" class="nav-card">
+        <h2>ETF 份额监测</h2>
+        <p>宽基与行业 ETF 份额走势、增减仓排行及拆分合并事件追踪。</p>
+      </a>
+
+      <a href="./market/avg_price.html" class="nav-card">
+        <h2>牛熊指标</h2>
+        <p>A股总市值 / GDP 估值分析、平均股价走势及牛熊趋势支撑线。</p>
+      </a>
+
+      <a href="./etf/etf_gjd_report.html" class="nav-card">
+        <h2>国家队动向分析</h2>
+        <p>上证指数历史大底与国家队增持节点复盘及测算。</p>
+      </a>
+    </div>
+  </div>
+
+  <!-- 引入公共脚本 -->
+  <script src="./common/common.js"></script>
+</body>
+</html>
