@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>牛熊指标</title>
+<!-- 引入公共样式 -->
+<link rel="stylesheet" href="../common/common.css">
+<link rel="stylesheet" href="avg_price.css">
+<script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
+<script src="market_data.js"></script>
+
+</head>
+<body class="theme-dark"> <!-- 默认加一个，JS会立刻覆盖 -->
+  <div class="sidebar-overlay" id="sidebarOverlay"></div>
+  <div class="app-layout">
+    <!-- 侧边栏 -->
+    <aside class="sidebar" id="sidebar">
+      <div class="sidebar-header">
+        <div class="logo">数据中心</div>
+        <!-- 把切换按钮和折叠按钮放在同一个容器里 -->
+        <div class="header-actions">
+          <button class="theme-toggle-btn" id="themeToggle" title="切换深浅色">🌙</button>
+          <button class="sidebar-toggle" id="sidebarToggle">☰</button>
+        </div>
+      </div>
+
+      <div class="sidebar-menu">
+        <div class="menu-group">
+          <a href="avg_price.html" class="menu-item">牛熊指标</a>
+          <a href="../etf/etf_share.html" class="menu-item">ETF 份额变动</a>
+          <a href="../etf/etf_gjd_report.html" class="menu-item">国家队行为框架</a>
+        </div>
+      </div>
+      <!-- 底部不再需要放置按钮了 -->
+    </aside>
+
+    <main class="main-content">
+      <div class="wrap">
+
+        <header>
+          <h1>牛熊指标</h1>
+        </header>
+
+        <!-- ================= KPI 卡片 ================= -->
+        <div class="kpi-row">
+          <div class="card">
+            <div class="kpi-label">
+              <span>全市场总市值</span>
+              <span class="kpi-date" id="kpi-mv-date"></span>
+            </div>
+            <div class="kpi-value" id="kpi-mv"></div>
+            <div class="kpi-delta flat" id="kpi-mv-d"></div>
+          </div>
+
+          <div class="card">
+            <div class="kpi-label">
+              <span id="kpi-gdp-label">GDP</span>
+            </div>
+            <div class="kpi-value" id="kpi-gdp"></div>
+            <div class="kpi-delta flat" id="kpi-gdp-yoy"></div>
+          </div>
+
+          <div class="card">
+            <div class="kpi-label">
+              <span id="kpi-ratio-label">市值 / GDP</span>
+            </div>
+            <div class="kpi-value" id="kpi-ratio"></div>
+            <div class="kpi-delta flat" id="kpi-ratio-d"></div>
+          </div>
+        </div>
+
+        <!-- ================= 主图：市值/GDP + 平均股价 ================= -->
+        <div class="card chart-card">
+          <div class="chart-toolbar">
+            <div class="chart-title">市值/GDP 与 平均股价</div>
+            <div class="gran-switch" id="granSwitch">
+              <button data-gran="day" class="active">日</button>
+              <button data-gran="week">周</button>
+              <button data-gran="month">月</button>
+            </div>
+          </div>
+          <div id="chart-main" class="chart"></div>
+        </div>
+
+        <!-- ================= 平均股价月线 K 线 ================= -->
+        <div class="card chart-card chart-price-card">
+          <div class="chart-toolbar">
+            <div class="chart-title">平均股价（月线）</div>
+            <button class="trend-btn active high" id="trendBtnHigh">高位风险</button>
+            <button class="trend-btn active low"  id="trendBtnLow">国运支撑</button>
+            <button class="trend-btn active mix"  id="trendBtnMix">低估定投</button>
+          </div>
+          <div id="chart-price" class="chart chart-sm"></div>
+        </div>
+
+        <!-- 数据说明提示栏 -->
+        <div class="note-bar">
+          <div style="line-height:1.9;">
+            总市值 = 上交所 + 深交所 + 北交所<span class="bse-note">（北交所市值自2021-11-15开市并纳入统计）</span><br>
+            <span id="gdp-note"></span><br>
+            T日平均股价计算：所有T日有交易股票收盘价汇总 / 所有T日交易股票数量
+          </div>
+        </div>
+
+        <!-- ================= 数据表格 ================= -->
+        <div class="card table-card">
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>日期</th>
+                  <th>总市值(万亿)</th>
+                  <th>市值/GDP</th>
+                  <th>涨跌幅</th>
+                  <th>估值</th>
+                  <th>操作</th>
+                </tr>
+              </thead>
+              <tbody id="tbody"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <footer>数据来源: 东方财富 · 国家统计局</footer>
+
+      </div>
+    </main>
+  </div>
+
+  <script src="../common/common.js"></script>
+  <script src="avg_price.js"></script>
+</body>
+</html>

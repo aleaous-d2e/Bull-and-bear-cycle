@@ -5,7 +5,7 @@ ETF 份额数据流水线
 合并ETF每日份额增量抓取与 ETF 池审查为单一脚本。
 
     【阶段 1】ETF池审查
-        抓取沪深快照 → 分类过滤 → 组内截断 → 成交额过滤 → 输出 etf_pool_review.csv
+        抓取沪深快照 → 分类过滤 → 组内截断 → 成交额过滤 → 直接产出行业主题列表
         每月 2 号（非交易日顺延至下一交易日）执行。
 
     【阶段 2】份额增量更新
@@ -13,12 +13,10 @@ ETF 份额数据流水线
         每个交易日执行。
 
 输出文件：
-    - etf_pool_review.csv          # 行业主题池（阶段 1 产物）
     - etf_share_data_broad.js      # 宽基份额数据 window.__ETF_SHARE_BROAD__
     - etf_share_data_sector.js     # 行业主题份额数据 window.__ETF_SHARE_SECTOR__
 
-代码来源：宽基内置 + etf_pool_review.csv（行业主题）。
-CSV 格式：基金代码,场内简称,跟踪指数,份额（亿份）
+代码来源：宽基内置 + 阶段 1 审查筛出的行业主题。
 meta 格式：{ "159516": {"name": "半导体设备ETF国泰"}, ... }
           宽基名称请在 etf_share_data_broad.js 中手动维护，脚本读取旧文件时原样保留。
 """
@@ -27,7 +25,6 @@ import pandas as pd
 import requests
 import json
 import os
-import csv
 import time
 from datetime import date, timedelta
 
@@ -47,9 +44,6 @@ BROAD_BASE_CODES = [
 WATCH_CODES = [
     # "159227",   # 示例
 ]
-
-# 行业主题 ETF 代码来源 CSV
-CSV_PATH = "etf_pool_review.csv"
 
 # 输出文件
 BROAD_JS = "etf_share_data_broad.js"
@@ -341,8 +335,8 @@ def classify(name):
     return "其他"
 
 
-def run_review(snapshot_date: date):
-    """阶段 1：审查 ETF 池，生成 etf_pool_review.csv。"""
+def run_review(snapshot_date: date) -> dict[str, str]:
+    """阶段 1：审查 ETF 池，返回筛出的行业主题 {code: name} 映射。"""
     print("=" * 60)
     print(f"阶段 1：审查 ETF 池（快照日 {snapshot_date}）")
     print("=" * 60)
@@ -392,80 +386,29 @@ def run_review(snapshot_date: date):
     if dropped_themes:
         print(f"   因成交额不足被剔除后空缺的分类（{len(dropped_themes)} 个）：{sorted(dropped_themes)}")
 
-    # 【步骤 7】：格式化并输出 CSV
-    print("7. 整理并输出 CSV...")
-    df["份额（亿份）"] = df["份额_亿份"].round(2)
-    # 输出前按分类、份额排序，保证 CSV 可读性
+    # 【步骤 7】：整理并直接返回（供阶段 2 使用，不再落盘 CSV）
+    print("7. 整理筛选结果...")
+    # 按分类、份额排序，保证输出顺序稳定
     df = df.sort_values(by=["跟踪指数", "份额_亿份"], ascending=[True, False])
 
-    df[["基金代码", "场内简称", "跟踪指数", "份额（亿份）"]].to_csv(
-        CSV_PATH, index=False, encoding="utf-8-sig")
-    print(f"完成！已写入 {CSV_PATH}，共 {len(df)} 行。\n")
+    result: dict[str, str] = {}
+    for _, row in df.iterrows():
+        nc = normalize_code(row["基金代码"])
+        if nc:
+            result[nc] = str(row["场内简称"]).strip()
+    print(f"完成！筛出 {len(result)} 只行业主题 ETF。\n")
+    return result
 
 
 # ============================================================
 # 阶段 2：历史份额增量更新
 # ============================================================
-def load_codes_from_csv(path: str) -> dict[str, str]:
-    """按 CSV 格式读取：基金代码,场内简称,跟踪指数,份额（亿份）
+def gather_codes(sector_map: dict[str, str]) -> dict[str, str]:
+    """合并宽基 + 行业主题，返回 {code: name}，去重保序。
 
-    - 代码列：基金代码
-    - 名称列：场内简称
-    - utf-8-sig 自动去掉 BOM
-    """
-    if not os.path.exists(path):
-        print(f"未发现 {path}，仅使用内置宽基代码。")
-        return {}
-
-    result: dict[str, str] = {}
-    try:
-        with open(path, "r", encoding="utf-8-sig", newline="") as f:
-            reader = csv.reader(f)
-            header = next(reader, None)
-            if not header:
-                print(f"{path} 为空文件。")
-                return {}
-
-            header_clean = [str(h).replace("\ufeff", "").strip() for h in header]
-
-            def find_idx(*names):
-                return next((header_clean.index(n) for n in names if n in header_clean), None)
-
-            # 代码列：优先“基金代码/代码/code”，缺省按第 1 列
-            code_idx = find_idx("基金代码", "代码", "code")
-            if code_idx is None:
-                code_idx = 0
-                print(f"{path} 未找到代码列，按第 1 列读取。")
-            # 名称列：优先“场内简称”等常见字段，缺省按第 2 列
-            name_idx = find_idx("场内简称", "基金名称", "名称", "基金简称", "简称")
-            if name_idx is None and len(header_clean) > 1:
-                name_idx = 1
-                print(f"{path} 未找到名称列，按第 2 列读取。")
-
-            for row in reader:
-                if not row or code_idx >= len(row):
-                    continue
-                nc = normalize_code(row[code_idx])
-                if not nc:
-                    continue
-                nm = str(row[name_idx]).strip() if name_idx is not None and name_idx < len(row) else ""
-                if nc not in result or (nm and not result[nc]):
-                    result[nc] = nm
-    except Exception as e:
-        print(f"读取 {path} 失败（{e}），仅使用内置宽基代码。")
-        return {}
-
-    print(f"{path}：识别到 {len(result)} 个代码。")
-    return result
-
-
-def gather_codes() -> dict[str, str]:
-    """合并宽基 + CSV，返回 {code: name}，去重保序。
-
-    名称优先级：CSV 名称 > 空字符串（宽基名称由用户在 js 中维护）。
+    名称优先级：sector_map 名称 > 空字符串（宽基名称由用户在 js 中维护）。
     """
     ordered: dict[str, str] = {}
-    csv_map = load_codes_from_csv(CSV_PATH)
 
     # 先铺内置宽基（名称留空，由 js 维护）
     for c in BROAD_BASE_CODES:
@@ -478,8 +421,11 @@ def gather_codes() -> dict[str, str]:
         except ValueError:
             print(f"跳过无法识别的交易所代码：{nc}")
 
-    # 再叠加 CSV 中的行业主题；若 CSV 提供了名称则覆盖空名
-    for nc, nm in csv_map.items():
+    # 再叠加行业主题；若 sector_map 提供了名称则覆盖空名
+    for nc, nm in sector_map.items():
+        nc = normalize_code(nc)
+        if not nc:
+            continue
         try:
             exchange_of(nc)
         except ValueError:
@@ -629,13 +575,34 @@ def save_js(path: str, var_name: str, payload: dict):
     print(f"已写入 {path}")
 
 
-def run_update(snapshot_date: date):
-    """阶段 2：历史份额增量更新，输出宽基 / 行业主题两个 JS 文件。"""
+def run_update(snapshot_date: date, sector_map: dict[str, str] | None = None):
+    """阶段 2：历史份额增量更新，输出宽基 / 行业主题两个 JS 文件。
+
+    sector_map：审查日由 run_review 直接传入；非审查日传 None 时，
+    从已有 SECTOR_JS 的 meta 恢复行业主题代码（等价于上次审查结果）。
+    """
     print("=" * 60)
     print("阶段 2：历史份额增量更新")
     print("=" * 60)
 
-    name_map = gather_codes()
+    # 读旧文件（两个），把 meta / series 合并到一起处理
+    existing_broad = load_existing_js(BROAD_JS)
+    existing_sector = load_existing_js(SECTOR_JS)
+    old_meta = {**(existing_broad.get("meta") or {}), **(existing_sector.get("meta") or {})}
+    series = {**(existing_broad.get("series") or {}), **(existing_sector.get("series") or {})}
+
+    # 非审查日：从已有 SECTOR_JS 的 meta 恢复行业主题代码（排除待观察代码，
+    # 否则 watch 代码会被当成正式代码做全量历史补齐，违反“只抓当日”的设计）
+    if sector_map is None:
+        sector_map = {}
+        watch_set = {nc for nc in (normalize_code(c) for c in WATCH_CODES) if nc}
+        for nc, entry in (existing_sector.get("meta") or {}).items():
+            if nc in watch_set:
+                continue
+            name = str(entry.get("name") or "") if isinstance(entry, dict) else ""
+            sector_map[nc] = name
+
+    name_map = gather_codes(sector_map)
     target_codes = list(name_map.keys())
     print(f"\n共 {len(target_codes)} 只正式 ETF。")
     print(f"待观察 ETF：{WATCH_CODES or '（无）'}")
@@ -649,18 +616,12 @@ def run_update(snapshot_date: date):
     all_dates_broad = [d.strftime("%Y-%m-%d") for d in broad_trade_dates]
     all_dates_sector = [d.strftime("%Y-%m-%d") for d in sector_trade_dates]
 
-    # 读旧文件（两个），把 meta / series 合并到一起处理
-    existing_broad = load_existing_js(BROAD_JS)
-    existing_sector = load_existing_js(SECTOR_JS)
-    old_meta = {**(existing_broad.get("meta") or {}), **(existing_sector.get("meta") or {})}
-    series = {**(existing_broad.get("series") or {}), **(existing_sector.get("series") or {})}
-
-    # 重建 meta（只保留本次目标代码；宽基名称保留旧值，行业主题用 CSV 名称）
+    # 重建 meta（只保留本次目标代码；宽基名称保留旧值，行业主题用审查名称）
     meta: dict[str, dict] = {}
     for code in target_codes:
         old_entry = old_meta.get(code) or {}
         old_name = str(old_entry.get("name") or "") if isinstance(old_entry, dict) else ""
-        # 名称优先级：CSV 名称 > 旧 js 名称 > 空
+        # 名称优先级：审查名称 > 旧 js 名称 > 空
         meta[code] = {"name": name_map.get(code) or old_name or ""}
         series.setdefault(code, [])
 
@@ -751,12 +712,19 @@ def main():
     print(f"快照日（T-1）：{snapshot_date}")
 
     # 池审查：每月 2 号（非交易日顺延至下一交易日）
+    # 审查日直接将筛出的行业主题列表传给阶段 2，不再经过 CSV 中转。
+    # 审查失败时不再中断流程：sector_map 保持 None，
+    # 由 run_update 自动从 SECTOR_JS 的 meta 恢复上次审查结果继续增量更新。
+    sector_map = None
     if is_review_day():
-        run_review(snapshot_date)
+        try:
+            sector_map = run_review(snapshot_date)
+        except Exception as e:
+            print(f"[警告] 审查失败：{type(e).__name__}: {e}，本次沿用上次结果继续增量更新。")
 
     # 历史份额增量：每天都会调用，内部通过 compute_missing 自动跳过无缺失的日期
     # 非交易日运行或重复运行时，不会发起任何网络请求
-    run_update(snapshot_date)
+    run_update(snapshot_date, sector_map)
 
 
 if __name__ == "__main__":
