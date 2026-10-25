@@ -35,12 +35,12 @@ jobs:
           
           # 运行 market 文件夹下的主流程
           cd market
-          python stock.py
+          python avg_price.py
           
           # 退回根目录，再进入 etf 文件夹运行流水线
           cd ..
           cd etf
-          python etf_pipeline.py
+          python etf_share.py
 
       # 4. 检查文件是否真的被更新了
       # 如果 Python 内部判断非交易日直接 return，文件不会变动，后续步骤会自动跳过
