@@ -92,7 +92,7 @@ def get_bse_mv(trade_date):
                         and str(item.get("rq", "")) == target_compact
                         and "zsz" in item):
                     mv = float(item["zsz"]) / 1e8
-                    print(f"[北交所] {trade_date} 总市值 {mv:.4f} 亿")
+                    print(f"[北交所] {trade_date} 总市值 {mv:.1f} 亿")
                     return mv
 
             print(f"[北交所] 未找到 {trade_date} 的数据")
@@ -230,16 +230,16 @@ def run_once():
         print(f"\n--- 开始处理 {date_str} ---")
 
         # ---------- 沪深 ----------
-        ashare_total, sse_mv, szse_mv, cnt = get_ashare_total_mv(date_str)
-        a_str = f"{ashare_total:.2f}" if ashare_total is not None else "None"
-        print(f"[沪深] 合计 {a_str} | 沪 {sse_mv} | 深 {szse_mv} | {cnt} 只")
+        ashare_total, sse_mv, szse_mv = get_ashare_total_mv(date_str)
+        a_str = f"{ashare_total}" if ashare_total is not None else "None"
+        print(f"[沪深] 合计 {a_str} | 沪 {sse_mv} | 深 {szse_mv} ")
 
         # ---------- 北交所（只取目标日期） ----------
         bse_mv = get_bse_mv(date_str)
 
         # ---------- 平均股价 ----------
         avg_close = get_avg_close(date_str)
-        print(f"[平均股价] 平均收盘价 {avg_close:.4f} 元" if avg_close is not None
+        print(f"[平均股价] 平均收盘价 {avg_close:.2f} 元" if avg_close is not None
               else "[平均股价] 无数据")
 
         # ---------- 【严格校验】如果核心数据抓不到，立刻报错，防止脏数据覆盖 ----------
@@ -251,7 +251,7 @@ def run_once():
         # ---------- 组装记录（北交所市值并入 ashare_total，只保留三所合计） ----------
         total_mv = ashare_total + (bse_mv or 0.0)
         record = {
-            "ashare_total": round(total_mv, 4),
+            "ashare_total": round(total_mv),
         }
 
         # 只取平均收盘价，open/high/low/close/price 统一写该值
@@ -262,7 +262,7 @@ def run_once():
         data.setdefault("ashare", {})[date_str] = record
 
         b_str = f"{bse_mv:.2f}" if bse_mv is not None else "None"
-        print(f"[{date_str}] 沪深 {a_str} | 北交所 {b_str} | 合计 {total_mv:.2f}")
+        print(f"[{date_str}] 沪深 {a_str} | 北交所 {b_str} | 合计 {total_mv}")
 
     # ---------- 统一写入文件 ----------
     now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")

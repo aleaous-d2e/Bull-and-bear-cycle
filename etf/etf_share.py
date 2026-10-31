@@ -81,6 +81,14 @@ REMOVE_BROAD_CATEGORIES = {"宽基"}
 # ============================================================
 # 通用工具
 # ============================================================
+
+def is_today_trading_day() -> bool:
+    """判断今天是否为真实交易日。"""
+    today = date.today()
+    df = ak.tool_trade_date_hist_sina()
+    s = set(pd.to_datetime(df["trade_date"]).dt.date)
+    return today in s
+
 def normalize_code(v) -> str | None:
     """把输入统一成 6 位数字代码，无效返回 None。"""
     if v is None:
@@ -707,6 +715,10 @@ def run_update(snapshot_date: date, sector_map: dict[str, str] | None = None):
 # 主流程
 # ============================================================
 def main():
+
+    if not is_today_trading_day():
+        print(f"{date.today()} 非交易日，跳过。")
+        return
     # 两个交易所的份额数据都是 T+1 定稿，统一取最近一个已定稿交易日
     snapshot_date = last_trade_date()
     print(f"快照日（T-1）：{snapshot_date}")
