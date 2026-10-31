@@ -4,14 +4,17 @@ on:
   push:
     branches: [ main ]     # 当你手动 git push 时触发
   schedule:
-    - cron: '0 0 * * *'    # 每天北京时间 08:00 自动触发 (UTC 00:00)
+    - cron: '06 0 * * *'    # 每天北京时间 08:06 自动触发 (UTC 00:06)
   workflow_dispatch:       # 【新增】允许你在 GitHub 网页 Actions 面板上手动点击按钮运行（用于测试或补数据）
 
 jobs:
   update-and-notify:
     runs-on: ubuntu-latest
     permissions:
-      contents: write      # 允许 Action 自动向仓库提交代码
+      contents: write          # 允许 Action 自动向仓库提交代码
+    concurrency:               # 加入并发控制，减少偶尔卡死
+      group: pages-deploy
+      cancel-in-progress: true 
     steps:
       # 1. 拉取代码
       - name: Checkout Code
