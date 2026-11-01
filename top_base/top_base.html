@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>市场顶底部研究</title>
+
+<!-- 统一使用 ECharts -->
+<script src="https://cdn.jsdelivr.net/npm/echarts@5.5.1/dist/echarts.min.js"></script>
+
+<link rel="stylesheet" href="../common/common.css">
+<link rel="stylesheet" href="top_base.css">
+</head>
+<body class="theme-dark">
+
+  <div class="sidebar-overlay" id="sidebarOverlay"></div>
+  <div class="app-layout">
+    <aside class="sidebar" id="sidebar">
+      <div class="sidebar-header">
+        <div class="logo">数据中心</div>
+        <div class="header-actions">
+          <button class="theme-toggle-btn" id="themeToggle" title="切换深浅色">🌙</button>
+          <button class="sidebar-toggle" id="sidebarToggle">☰</button>
+        </div>
+      </div>
+      <div class="sidebar-menu">
+        <div class="menu-group">
+          <a href="top_base.html" class="menu-item active">顶底部研究</a>
+          <a href="../market/avg_price.html" class="menu-item">牛熊指标</a>
+          <a href="../etf/etf_share.html" class="menu-item">ETF 份额变动</a>
+          <a href="../etf/etf_gjd_report.html" class="menu-item">国家队行为框架</a>
+        </div>
+      </div>
+    </aside>
+
+    <main class="main-content">
+      <div class="wrap">
+        <header>
+          <div>
+            <h1>市场底部研究</h1>
+          </div>
+        </header>
+
+        <div class="charts-grid">
+          <!-- ================= 指数月线（全 ECharts 重构） ================= -->
+          <div class="chart-card main-chart chart-price-card">
+            <div class="chart-toolbar">
+              <div class="toolbar-left">
+                <button class="trend-btn active low" id="btnLow">国运支撑</button>
+                <button class="trend-btn active mix" id="btnMix">低估定投</button>
+                <button class="trend-btn active high" id="btnHigh">高风险</button>
+                <div class="drop-info hide" id="dropInfo"></div>
+              </div>
+              <div class="toolbar-right">
+                <div class="gran-switch" id="indexSwitch"></div>
+              </div>
+            </div>
+            <!-- 注意这里改为了 id="monthChart" -->
+            <div id="monthChart" class="chart"></div>
+          </div>
+
+          <!-- ================= 破净比例与大盘指数 ================= -->
+          <div class="chart-card main-chart">
+            <div class="chart-header">
+              <div>
+                <div class="chart-title">破净比例与大盘顶底负相关</div>
+                <div class="chart-legend">
+                  <span class="legend-item"><i data-color="orange"></i>破净比例</span>
+                  <span class="legend-item"><i data-color="blue"></i>大盘指数</span>
+                </div>
+              </div>
+              <div class="period-tabs" id="periodTabs">
+                <button class="period-btn active" data-period="day">日</button>
+                <button class="period-btn" data-period="week">周</button>
+                <button class="period-btn" data-period="month">月</button>
+              </div>
+            </div>
+            <div class="chart-body tall" id="peChart"></div>
+          </div>
+
+        </div>
+
+        <!-- ================= 指标说明 ================= -->
+        <div class="indicator-note">
+          <h2>指标说明与使用方法</h2>
+          <div class="note-grid">
+            <div class="note-card">
+              <h3>指标是什么</h3>
+              <p>破净比例 = 破净家数 / 股票总数，比例越高市场越便宜。</p>
+              <p>用比例而非家数：IPO使股票总数扩容，比例才能跨周期比较。</p>
+            </div>
+            <div class="note-card">
+              <h3>怎么读</h3>
+              <p>底部：比例快速上升并见顶，通常与指数底同步或略滞后。</p>
+              <p>顶部：比例走低，往往不如底部区域判断有效。</p>
+            </div>
+            <div class="note-card">
+              <h3>怎么用</h3>
+              <p>比例处于历史高位时是分批布局区域，不做精确择时与all in。</p>
+              <p>底部持续时间不确定，需要耐心，更需要结合其他指标综合判断</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <script src="top_base_data.js"></script>
+  <script src="../common/common.js"></script>
+  <script src="top_base.js"></script>
+
+</body>
+</html>

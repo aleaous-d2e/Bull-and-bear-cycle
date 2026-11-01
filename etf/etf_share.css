@@ -1,26 +1,11 @@
-:root {
-  --bg: #0b1220;
-  --panel: #111c30;
-  --panel-2: #16233a;
-  --line: #22314d;
-  --text: #e6edf7;
-  --muted: #8ba0bd;
-  --up: #34d399;
-  --down: #f87171;
-}
-
-* { box-sizing: border-box; }
-
-/* 注意：body 的背景/内边距/字体已由 common.css 统一接管，
-   本页不再重复声明，否则会把侧边栏顶出屏幕、背景叠两层 */
+/* =========================================================
+   etf_share.css —— 仅本页特有组件
+   （基础布局 / 主题 / 图表卡片 / 涨跌色等公共样式见 common.css）
+   ========================================================= */
 
 .wrap { max-width: 1400px; margin: 0 auto; }
 
-header { margin-bottom: 24px; display: flex; flex-wrap: wrap; justify-content: space-between; align-items: flex-end; }
-header h1 { margin: 0; font-size: 26px; font-weight: 700; }
-header p { margin: 6px 0 0; font-size: 13.5px; color: var(--muted); }
-
-/* 工具栏 */
+/* 工具栏（含模式切换 / 分类切换 / 悬浮提示） */
 .toolbar {
   display: flex;
   flex-wrap: wrap;
@@ -237,66 +222,7 @@ header p { margin: 6px 0 0; font-size: 13.5px; color: var(--muted); }
   border: 1px solid rgba(56, 189, 248, 0.3);
 }
 
-/* 红涨绿跌 */
-.text-up { color: #f87171 !important; }
-.text-down { color: #34d399 !important; }
-.text-flat { color: var(--muted) !important; }
-
-/* ===== 多图表网格：Web 端一行 2 个，H5 端一行 1 个 ===== */
-.charts-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 16px;
-}
-
-.chart-card {
-  background: linear-gradient(160deg, var(--panel-2), var(--panel));
-  border: 1px solid var(--line);
-  border-radius: 16px;
-  padding: 16px;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, .1);
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
-}
-
-.chart-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  margin-bottom: 12px;
-  gap: 10px;
-}
-.chart-title {
-  font-size: 15px;
-  font-weight: 600;
-  /* 【修复】图表标题颜色使用主题文字色 */
-  color: var(--text);
-}
-
-.chart-legend {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px 12px;
-  margin-top: 6px;
-  font-size: 11.5px;
-  color: var(--muted);
-  line-height: 1.5;
-}
-.legend-item {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  white-space: nowrap;
-}
-.legend-item i {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  display: inline-block;
-  flex: 0 0 auto;
-}
-
+/* 分组切换按钮 */
 .group-tabs {
   display: flex;
   /* 【修复】移除深色半透明背景，使用主题变量 */
@@ -325,12 +251,7 @@ header p { margin: 6px 0 0; font-size: 13.5px; color: var(--muted); }
   box-shadow: 0 2px 6px rgba(56, 189, 248, 0.3);
 }
 
-.chart-body {
-  height: 280px;
-  width: 100%;
-  position: relative;
-  overflow: hidden;
-}
+/* 隐藏 TradingView logo */
 #tv-attr-logo, a[href*="tradingview.com"] { display: none !important; }
 
 /* 悬浮窗 */
@@ -354,8 +275,6 @@ header p { margin: 6px 0 0; font-size: 13.5px; color: var(--muted); }
 .lw-tooltip-row .lw-code { color: var(--muted); font-size: 10.5px; margin-left: 2px; }
 .lw-tooltip-row b { margin-left: auto; padding-left: 12px; font-weight: 600; font-variant-numeric: tabular-nums; }
 
-.empty { display: flex; align-items: center; justify-content: center; height: 400px; font-size: 14px; color: var(--muted); }
-
 /* ===== 浅色主题专属调优 ===== */
 body.theme-light .ab-tag.merge {
   color: #0284c7; /* 加深青色 */
@@ -367,11 +286,8 @@ body.theme-light .ab-tag.split {
   background: rgba(251, 191, 36, 0.1);
   border-color: rgba(251, 191, 36, 0.2);
 }
-/* 浅色主题下加深红绿颜色，避免刺眼且增强对比 */
-body.theme-light .text-up { color: #dc2626 !important; }
-body.theme-light .text-down { color: #059669 !important; }
 
-/* ===== H5 端：一行一个卡片 + 尺寸微调 ===== */
+/* ===== H5 端：本页专用适配 ===== */
 @media (max-width: 768px) {
   header { margin-bottom: 16px; }
   header h1 { font-size: 20px; }
@@ -388,13 +304,5 @@ body.theme-light .text-down { color: #059669 !important; }
     padding: 10px 12px;
     overflow-x: auto;
   }
-
-  .charts-grid {
-    grid-template-columns: minmax(0, 1fr);
-    gap: 12px;
-  }
-  .chart-card { padding: 12px; border-radius: 12px; }
-  .chart-header { flex-wrap: wrap; }
   .group-tabs { overflow-x: auto; max-width: 100%; }
-  .chart-body { height: 240px; }
 }

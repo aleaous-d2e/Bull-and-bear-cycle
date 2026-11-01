@@ -1,11 +1,115 @@
 /* ============================================================
-   0. 引用 common.js 提供的全局工具
+   0. 引用公共工具 + 本地兜底 (防止 common.js 版本过旧导致白屏)
    ============================================================ */
-const $            = window.$;
-const getChartTheme = window.getChartTheme;
-const debounce      = window.debounce;
+const $ = window.$ || (id => document.getElementById(id));
+const debounce = window.debounce || ((fn, wait = 250) => {
+  let timer = null;
+  return function (...args) {
+    clearTimeout(timer);
+    timer = setTimeout(() => fn.apply(this, args), wait);
+  };
+});
+const getChartTheme = window.getChartTheme || (() => {
+  const isLight = document.body.classList.contains('theme-light');
+  return {
+    isLight, text: isLight ? '#6b7280' : '#8ba0bd', grid: isLight ? '#f3f4f6' : 'rgba(139,160,189,0.08)',
+    axis: isLight ? '#e5e7eb' : 'rgba(139,160,189,0.2)', tooltipBg: isLight ? '#ffffff' : 'rgba(17, 28, 48, 0.96)',
+    tooltipBorder: isLight ? '#e5e7eb' : '#22314d', tooltipText: isLight ? '#1f2937' : '#e6edf7',
+    crossLine: isLight ? '#d1d5db' : 'rgba(139,160,189,0.4)', crossLabelBg: isLight ? '#9ca3af' : '#22314d',
+    crossLabelText: '#ffffff', zoomBorder: isLight ? '#e5e7eb' : '#22314d', zoomFill: isLight ? 'rgba(37,99,235,.08)' : 'rgba(56,189,248,.15)',
+    zoomText: isLight ? '#6b7280' : '#8ba0bd', zoomHandle: isLight ? '#2563eb' : '#38bdf8', lineBlue: isLight ? '#2563eb' : '#38bdf8',
+    lineYellow: isLight ? '#f59e0b' : '#fbbf24', lineRed: isLight ? '#ef4444' : '#f87171', lineGreen: isLight ? '#10b981' : '#34d399',
+    linePurple: isLight ? '#8b5cf6' : '#c084fc'
+  };
+});
+const shiftMonths = window.shiftMonths || ((dateStr, months) => {
+  const d = new Date(dateStr + 'T00:00:00');
+  const day = d.getDate();
+  d.setDate(1);
+  d.setMonth(d.getMonth() - months);
+  d.setDate(Math.min(day, new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate()));
+  return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+});
+const getWeekKey = window.getWeekKey || ((dateStr) => {
+  const d = new Date(dateStr + 'T00:00:00');
+  const day = d.getDay() || 7;
+  const monday = new Date(d);
+  monday.setDate(d.getDate() - day + 1);
+  return monday.getFullYear() + '-' + String(monday.getMonth() + 1).padStart(2, '0') + '-' + String(monday.getDate()).padStart(2, '0');
+});
+const aggregateOHLC = window.aggregateOHLC || ((daily, gran) => {
+  const groups = new Map();
+  for (const r of daily) {
+    if (r.open == null || r.high == null || r.low == null || r.close == null) continue;
+    const key = gran === 'month' ? r.date.slice(0, 7) : getWeekKey(r.date);
+    const g = groups.get(key);
+    if (!g) groups.set(key, { key, open: r.open, high: r.high, low: r.low, close: r.close });
+    else {
+      if (r.high > g.high) g.high = r.high;
+      if (r.low < g.low) g.low = r.low;
+      g.close = r.close;
+    }
+  }
+  return Array.from(groups.values()).sort((a, b) => (a.key < b.key ? -1 : a.key > b.key ? 1 : 0));
+});
+const buildDataZoom = window.buildDataZoom || ((range, isMobile, bottom, theme) => {
+  const base = {
+    height: isMobile ? 14 : 18, bottom: bottom,
+    borderColor: theme.zoomBorder, fillerColor: theme.zoomFill,
+    handleStyle: { color: theme.zoomHandle },
+    textStyle: { fontSize: isMobile ? 9 : 11, color: theme.zoomText },
+    dataBackground: { lineStyle: { color: theme.axis }, areaStyle: { color: theme.grid } }
+  };
+  return [
+    Object.assign({ type: 'inside' }, range),
+    Object.assign({ type: 'slider' }, base, range)
+  ];
+});
+const fitTrend = window.fitTrend || ((points) => {
+  if (!points || points.length < 2) return null;
+  let sx = 0, sy = 0, sxy = 0, sxx = 0;
+  for (const p of points) { sx += p.x; sy += p.y; sxy += p.x * p.y; sxx += p.x * p.x; }
+  const n = points.length;
+  const denom = n * sxx - sx * sx;
+  if (Math.abs(denom) < 1e-9) return null;
+  const slope = (n * sxy - sx * sy) / denom;
+  const intercept = (sy - slope * sx) / n;
+  return (x) => slope * x + intercept;
+});
+const buildAxisTooltip = window.buildAxisTooltip || ((theme, formatter) => ({
+  trigger: 'axis',
+  axisPointer: { type: 'cross', label: { backgroundColor: theme.crossLabelBg, color: theme.crossLabelText }, crossStyle: { color: theme.crossLine }, lineStyle: { color: theme.crossLine } },
+  confine: true, backgroundColor: theme.tooltipBg, borderColor: theme.tooltipBorder, borderWidth: 1, textStyle: { color: theme.tooltipText },
+  extraCssText: 'box-shadow: 0 4px 12px rgba(0,0,0,.1); border-radius: 6px;',
+  formatter
+}));
+const formatCandlestickTooltip = window.formatCandlestickTooltip || ((theme, params, getDataFn) => {
+  if (!params || !params.length) return '';
+  const p = params.find(item => item.seriesType === 'candlestick');
+  if (!p) return '';
+  const d = getDataFn(p.dataIndex);
+  if (!d) return '';
+  const upCls = d.close >= d.open;
+  const color = upCls ? theme.lineRed : theme.lineGreen;
+  let html = `<div style="font-weight:600;margin-bottom:4px;font-size:13px;">${d.date}</div><div style="font-size:12px;line-height:1.75;">`;
+  html += `<div>开盘：<b>${d.open.toFixed(2)}</b></div>`;
+  html += `<div>最高：<b>${d.high.toFixed(2)}</b></div>`;
+  html += `<div>最低：<b>${d.low.toFixed(2)}</b></div>`;
+  html += `<div>收盘：<b style="color:${color}">${d.close.toFixed(2)}</b></div>`;
+  if (d.prevClose != null) {
+    const chg = (d.close / d.prevClose - 1) * 100;
+    html += `<div>涨跌幅：<b style="color:${chg >= 0 ? theme.lineRed : theme.lineGreen}">${chg >= 0 ? '+' : ''}${chg.toFixed(2)}%</b></div>`;
+  }
+  return html + '</div>';
+});
 
+// 设置 KPI 变化文本：pct == null 时显示占位符（统一处理无基准数据的情况）
 function setDelta(el, text, pct) {
+  if (pct == null) {
+    el.textContent = '—';
+    el.className = 'kpi-delta flat';
+    return;
+  }
   el.textContent = text + (pct >= 0 ? '+' : '') + pct.toFixed(2) + '%';
   el.className = 'kpi-delta ' + (pct > 0 ? 'up' : pct < 0 ? 'down' : 'flat');
 }
@@ -118,18 +222,14 @@ function buildSeries(ashare) {
   return out;
 }
 
+// 按周期分组，保留每组最后一条记录（含 mv/gdp/price/ratio 等完整字段）
 function aggregateSeries(daily, gran) {
   if (gran === 'day') return daily;
   const groups = new Map();
   for (const r of daily) {
     let key;
     if (gran === 'month') key = r.date.slice(0, 7);
-    else if (gran === 'week') {
-      const d = new Date(r.date + 'T00:00:00');
-      const day = d.getDay(), diff = day === 0 ? -6 : 1 - day;
-      d.setDate(d.getDate() + diff);
-      key = d.toISOString().slice(0, 10);
-    }
+    else if (gran === 'week') key = getWeekKey(r.date); // 复用 common.js 的周一起点计算
     groups.set(key, r);
   }
   const arr = Array.from(groups.values());
@@ -172,10 +272,9 @@ function renderKPI() {
   const gdpVal = GDP_ANNUAL[yearNow];
   $('kpi-gdp').innerHTML = (gdpVal / 10000).toFixed(2) + '<small>万亿</small>';
 
-  const yoyEl = $('kpi-gdp-yoy');
+  // 无上一年数据时传 null，由 setDelta 统一渲染占位符
   const gdpBase = GDP_ANNUAL[yearBase];
-  if (gdpBase) setDelta(yoyEl, '同比 ' + yearBase + '年 ', (gdpVal / gdpBase - 1) * 100);
-  else { yoyEl.textContent = '—'; yoyEl.className = 'kpi-delta flat'; }
+  setDelta($('kpi-gdp-yoy'), '同比 ' + yearBase + '年 ', gdpBase ? (gdpVal / gdpBase - 1) * 100 : null);
 
   $('kpi-ratio-label').textContent = '市值 / GDP（' + (GDP_CURRENT.isEstimate ? GDP_CURRENT.year + 'E' : GDP_CURRENT.year + '年') + '）';
   $('kpi-ratio').textContent = last.ratio.toFixed(3);
@@ -216,15 +315,6 @@ function insertNoteBar() {
   }
 }
 
-function shiftMonths(dateStr, months) {
-  const d = new Date(dateStr + 'T00:00:00');
-  const day = d.getDate();
-  d.setDate(1);
-  d.setMonth(d.getMonth() - months);
-  d.setDate(Math.min(day, new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate()));
-  return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
-}
-
 /* ============================================================
    6. 主图
    ============================================================ */
@@ -238,20 +328,6 @@ function getValuationMarks(theme) {
     lineStyle: { color: m.color, type: 'dashed', width: 1 },
     label: { formatter: m.label, color: m.color, fontWeight: 600 }
   }));
-}
-
-function buildDataZoom(range, isMobile, bottom, theme) {
-  const base = {
-    height: isMobile ? 14 : 18, bottom: bottom,
-    borderColor: theme.zoomBorder, fillerColor: theme.zoomFill,
-    handleStyle: { color: theme.zoomHandle },
-    textStyle: { fontSize: isMobile ? 9 : 11, color: theme.zoomText },
-    dataBackground: { lineStyle: { color: theme.axis }, areaStyle: { color: theme.grid } }
-  };
-  return [
-    Object.assign({ type: 'inside' }, range),
-    Object.assign({ type: 'slider' }, base, range)
-  ];
 }
 
 function renderChart() {
@@ -273,23 +349,19 @@ function renderChart() {
       top: 0, left: 'center', itemGap: isMobile ? 12 : 30, itemWidth: isMobile ? 14 : 24, itemHeight: isMobile ? 8 : 12,
       data: ['市值/GDP', '平均股价(元)'], textStyle: { color: theme.legend || theme.text, fontSize: isMobile ? 11 : 12 }
     },
-    tooltip: {
-      trigger: 'axis',
-      axisPointer: { type: 'cross', label: { backgroundColor: theme.crossLabelBg, color: theme.crossLabelText }, crossStyle: { color: theme.crossLine }, lineStyle: { color: theme.crossLine } },
-      confine: true, backgroundColor: theme.tooltipBg, borderColor: theme.tooltipBorder, borderWidth: 1, textStyle: { color: theme.tooltipText },
-      extraCssText: 'box-shadow: 0 4px 12px rgba(0,0,0,.1); border-radius: 6px;',
-      formatter: params => {
-        const d = params[0].axisValue, r = seriesIndex.get(d);
-        if (!r) return '';
-        const v = valuation(r.ratio);
-        let html = `<div style="font-weight:600;margin-bottom:4px;font-size:13px;">${d}</div>`;
-        html += `<div style="font-size:12px;color:${theme.lineBlue};">市值/GDP：${r.ratio.toFixed(3)}</div>`;
-        if (r.price != null) html += `<div style="font-size:12px;color:${theme.lineYellow};">平均股价：${r.price.toFixed(2)} 元</div>`;
-        else html += `<div style="font-size:12px;color:${theme.text};">平均股价：暂无数据</div>`;
-        html += `<div style="font-size:12px;margin-top:4px;"><b>${v.level} · ${v.action}</b></div>`;
-        return html;
-      }
-    },
+    // 统一 tooltip（带兜底防御）
+    tooltip: buildAxisTooltip(theme, params => {
+      if (!params || !params.length) return '';
+      const d = params[0].axisValue, r = seriesIndex.get(d);
+      if (!r) return '';
+      const v = valuation(r.ratio);
+      let html = `<div style="font-weight:600;margin-bottom:4px;font-size:13px;">${d}</div>`;
+      html += `<div style="font-size:12px;color:${theme.lineBlue};">市值/GDP：${r.ratio.toFixed(3)}</div>`;
+      if (r.price != null) html += `<div style="font-size:12px;color:${theme.lineYellow};">平均股价：${r.price.toFixed(2)} 元</div>`;
+      else html += `<div style="font-size:12px;color:${theme.text};">平均股价：暂无数据</div>`;
+      html += `<div style="font-size:12px;margin-top:4px;"><b>${v.level} · ${v.action}</b></div>`;
+      return html;
+    }),
     xAxis: {
       type: 'category', data: series.map(s => s.date),
       axisLine: { lineStyle: { color: theme.axis } },
@@ -326,47 +398,19 @@ function renderChart() {
 /* ============================================================
    6.1 平均股价 K 线
    ============================================================ */
-function weekKeyOf(dateStr) {
-  const d = new Date(dateStr + 'T00:00:00'); const day = d.getDay(); const diff = day === 0 ? -6 : 1 - day;
-  d.setDate(d.getDate() + diff);
-  return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
-}
-
-function aggregateOHLC(daily, gran) {
-  const groups = new Map();
-  for (const r of daily) {
-    const key = gran === 'month' ? r.date.slice(0, 7) : weekKeyOf(r.date);
-    if (r.open == null || r.high == null || r.low == null || r.close == null) continue;
-    const g = groups.get(key);
-    if (!g) groups.set(key, { key, open: r.open, high: r.high, low: r.low, close: r.close });
-    else {
-      if (r.high > g.high) g.high = r.high;
-      if (r.low < g.low) g.low = r.low;
-      g.close = r.close;
-    }
-  }
-  return Array.from(groups.values()).sort((a, b) => (a.key < b.key ? -1 : a.key > b.key ? 1 : 0));
-}
-
 const TREND_HIGH_KEYS = ['2008-02', '2015-12', '2021-12'].map(key => ({ key, pick: 'high' }));
 const TREND_LOW_KEYS  = ['2008-11', '2019-01', '2024-02'].map(key => ({ key, pick: 'low'  }));
 const TREND_MIX_KEYS  = [{ key: '2005-09', pick: 'high' }, { key: '2012-12', pick: 'low' }];
 
+// 用 fitTrend 拟合趋势：仅返回从首锚点起每期的预测值（前置 null 保持对齐）
 function buildExtendedTrend(agg, anchors) {
   const keyToIdx = new Map(); agg.forEach((g, i) => keyToIdx.set(g.key, i));
   const pts = [];
   for (const a of anchors) { const idx = keyToIdx.get(a.key); if (idx != null) pts.push({ x: idx, y: agg[idx][a.pick] }); }
-  if (pts.length < 2) return null;
-
-  let sx = 0, sy = 0, sxy = 0, sxx = 0;
-  for (const p of pts) { sx += p.x; sy += p.y; sxy += p.x * p.y; sxx += p.x * p.x; }
-  const denom = pts.length * sxx - sx * sx;
-  if (Math.abs(denom) < 1e-9) return null;
-
-  const slope = (pts.length * sxy - sx * sy) / denom;
-  const intercept = (sy - slope * sx) / pts.length;
+  const predict = fitTrend(pts);
+  if (!predict) return null;
   const out = new Array(agg.length).fill(null);
-  for (let i = pts[0].x; i < agg.length; i++) out[i] = +(slope * i + intercept).toFixed(3);
+  for (let i = pts[0].x; i < agg.length; i++) out[i] = +predict(i).toFixed(3);
   return out;
 }
 
@@ -378,7 +422,8 @@ function trendSeries(name, data, color, dashed) {
 function renderPriceChart() {
   if (!dailySeries.length) return;
   if (!priceAgg) priceAgg = aggregateOHLC(dailySeries, 'month');
-  const agg = priceAgg; if (!agg.length) return;
+  if (!priceAgg.length) return;
+  const agg = priceAgg;
 
   const theme = getChartTheme(); const isMobile = window.innerWidth <= 720;
   const total = agg.length; const visible = Math.min(isMobile ? 60 : 72, total); const startIndex = Math.max(0, total - visible);
@@ -397,22 +442,22 @@ function renderPriceChart() {
   priceChart.setOption({
     backgroundColor: 'transparent', legend: { show: false },
     grid: isMobile ? { left: 8, right: 12, top: 20, bottom: 46, containLabel: true } : { left: 22, right: 30, top: 26, bottom: 62, containLabel: true },
-    tooltip: {
-      trigger: 'axis', axisPointer: { type: 'cross', label: { backgroundColor: theme.crossLabelBg, color: theme.crossLabelText }, crossStyle: { color: theme.crossLine }, lineStyle: { color: theme.crossLine } },
-      confine: true, backgroundColor: theme.tooltipBg, borderColor: theme.tooltipBorder, borderWidth: 1, textStyle: { color: theme.tooltipText },
-      extraCssText: 'box-shadow: 0 4px 12px rgba(0,0,0,.1); border-radius: 6px;',
-      formatter: params => {
-        if (!params || !params.length) return '';
-        const idx = params[0].dataIndex; const g = agg[idx]; if (!g) return '';
-        const prev = idx > 0 ? agg[idx - 1] : null; const chg = prev ? (g.close / prev.close - 1) * 100 : null;
-        const upCls = g.close >= g.open;
-        let html = `<div style="font-weight:600;margin-bottom:4px;font-size:13px;">${g.key}</div><div style="font-size:12px;line-height:1.75;">`;
-        html += `<div>开盘：<b>${g.open.toFixed(2)}</b></div><div>最高：<b>${g.high.toFixed(2)}</b></div><div>最低：<b>${g.low.toFixed(2)}</b></div>`;
-        html += `<div>收盘：<b style="color:${upCls ? theme.lineRed : theme.lineGreen}">${g.close.toFixed(2)}</b></div>`;
-        if (chg != null) html += `<div>涨跌幅：<b style="color:${chg >= 0 ? theme.lineRed : theme.lineGreen}">${chg >= 0 ? '+' : ''}${chg.toFixed(2)}%</b></div>`;
-        return html + '</div>';
-      }
-    },
+    // ★ 统一调用公共 K线排版工具（带兜底防御）
+    tooltip: buildAxisTooltip(theme, params => {
+      return formatCandlestickTooltip(theme, params, (idx) => {
+        const g = agg[idx];
+        if (!g) return null;
+        const prev = idx > 0 ? agg[idx - 1] : null;
+        return {
+          date: g.key,
+          open: g.open,
+          high: g.high,
+          low: g.low,
+          close: g.close,
+          prevClose: prev ? prev.close : null
+        };
+      });
+    }),
     xAxis: { type: 'category', data: agg.map(g => g.key), boundaryGap: true, axisLine: { lineStyle: { color: theme.axis } }, axisTick: { show: false }, axisLabel: { color: theme.text, fontSize: isMobile ? 10 : 11, interval: 'auto', hideOverlap: true } },
     yAxis: { scale: true, axisLine: { show: false }, axisTick: { show: false }, splitLine: { lineStyle: { color: theme.grid } }, axisLabel: { color: theme.text, fontSize: isMobile ? 10 : 11 } },
     dataZoom: buildDataZoom({ startValue: startIndex, endValue: total - 1 }, isMobile, isMobile ? 4 : 10, theme),
@@ -482,15 +527,19 @@ window.addEventListener('themeChanged', () => { if (chart) renderChart(); if (pr
     });
   });
 
+  let lastIsMobile = window.innerWidth <= 720;
+
   window.addEventListener('resize', debounce(() => {
     if (!chart) return;
     const nowMobile = window.innerWidth <= 720;
-    const wasMobile = chart.getOption().grid[0].top === 40;
-    if (nowMobile !== wasMobile) {
-      chart.dispose(); chart = null; if (priceChart) { priceChart.dispose(); priceChart = null; }
+    if (nowMobile !== lastIsMobile) {
+      lastIsMobile = nowMobile;
+      chart.dispose(); chart = null;
+      if (priceChart) { priceChart.dispose(); priceChart = null; }
       renderChart(); renderPriceChart(); renderTable();
     } else {
-      chart.resize(); if (priceChart) priceChart.resize();
+      chart.resize();
+      if (priceChart) priceChart.resize();
     }
   }, 250));
 })();

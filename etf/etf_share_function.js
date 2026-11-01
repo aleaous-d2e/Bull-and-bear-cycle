@@ -27,13 +27,9 @@ window.__ETF_GROUPS__ = [
 (function () {
   "use strict";
 
-  // ★ 优先使用 common.js 提供的公共工具，若未加载则使用本地兜底定义
-  const fmt = window.formatNumber || ((n, d = 2) =>
-    Number(n).toLocaleString('zh-CN', { minimumFractionDigits: d, maximumFractionDigits: d })
-  );
-  const sortByDate = window.sortByDate || ((arr) =>
-    arr.slice().sort((a, b) => a.date.localeCompare(b.date))
-  );
+  // ★ common.js 已在 HTML 中先于本脚本加载，直接解构公共工具
+  //   （formatNumber 别名 fmt；toTimeStr / diffOverDays / sortByDate 均为 window 上已有）
+  const { formatNumber: fmt, sortByDate, toTimeStr, diffOverDays } = window;
 
   const DATA = window.__ETF_SHARE_DATA__;
   const gridEl = document.getElementById("charts-grid");
@@ -126,15 +122,14 @@ window.__ETF_GROUPS__ = [
     return null;
   }
 
-  function toTimeStr(t) {
-    if (!t) return null;
-    if (typeof t === 'string') return t;
-    if (typeof t === 'number') return new Date(t * 1000).toISOString().slice(0, 10);
-    if (typeof t === 'object' && t.year !== undefined) {
-      return `${t.year}-${String(t.month).padStart(2, '0')}-${String(t.day).padStart(2, '0')}`;
-    }
-    return null;
-  }
+  // === 表格单元格模板（消除排行榜 6 处重复的内联 style） ===
+  const TD_R = 'text-align:right; font-variant-numeric: tabular-nums';
+  const numCell = (v) => `<td style="${TD_R};">${fmt(v)}</td>`;
+  const diffCell = (v) => {
+    const str = (v > 0 ? "+" : "") + fmt(v);
+    const cls = v > 0 ? "text-up" : (v < 0 ? "text-down" : "text-flat");
+    return `<td class="${cls}" style="${TD_R}; font-weight: 600;">${str}</td>`;
+  };
 
   const rangeBtns    = Array.from(document.querySelectorAll(".range-btn"));
   const modeBtns     = Array.from(document.querySelectorAll(".mode-btn"));
@@ -211,7 +206,8 @@ window.__ETF_GROUPS__ = [
     board.style.display = "block";
   }
 
-  // === 份额排行榜：新增近三月，计算方式改为绝对差值（亿份） ===
+  // === 份额排行榜：周/月/季变化统一由 common.js 的 diffOverDays 计算 ===
+  //    diffOverDays 内部已处理"数据跨度不足时回退到首条"的逻辑
   function renderLeaderboard(category) {
     const board = document.getElementById("leaderboard-board");
     if (!board) return;
@@ -226,45 +222,16 @@ window.__ETF_GROUPS__ = [
     const items = [];
     codesInCategory.forEach(code => {
       const pts = DATA.series[code] || [];
-      if (pts.length > 0) {
-        const lastPt = pts[pts.length - 1];
+      if (!pts.length) return;
 
-        // 封装获取过去 N 天最接近数据点的函数
-        const getPastPt = (days) => {
-          const lastDate = new Date(lastPt.date);
-          const targetDate = new Date(lastDate);
-          targetDate.setDate(targetDate.getDate() - days);
-          let pastPt = pts[0];
-          for (let i = pts.length - 1; i >= 0; i--) {
-            if (new Date(pts[i].date) <= targetDate) {
-              pastPt = pts[i];
-              break;
-            }
-          }
-          return pastPt;
-        };
-
-        // 近一周 (7天)
-        const pastPtWeek = getPastPt(7);
-        const changeWeek = pastPtWeek ? (lastPt.shares_yi - pastPtWeek.shares_yi) : 0;
-
-        // 近一月 (30天)
-        const pastPtMonth = getPastPt(30);
-        const changeMonth = pastPtMonth ? (lastPt.shares_yi - pastPtMonth.shares_yi) : 0;
-
-        // 近三月 (90天)
-        const pastPtQuarter = getPastPt(90);
-        const changeQuarter = pastPtQuarter ? (lastPt.shares_yi - pastPtQuarter.shares_yi) : 0;
-
-        items.push({
-          code: code,
-          name: NAME_MAP[code] || code,
-          value: lastPt.shares_yi,
-          changeWeek: changeWeek,
-          changeMonth: changeMonth,
-          changeQuarter: changeQuarter
-        });
-      }
+      items.push({
+        code: code,
+        name: NAME_MAP[code] || code,
+        value: pts[pts.length - 1].shares_yi,
+        changeWeek:    diffOverDays(pts, 7),
+        changeMonth:   diffOverDays(pts, 30),
+        changeQuarter: diffOverDays(pts, 90),
+      });
     });
 
     if (!items.length) {
@@ -311,25 +278,16 @@ window.__ETF_GROUPS__ = [
           </tr>
         </thead>
         <tbody>
-          ${displayItems.map((item, idx) => {
-            // 统一处理差值格式化（保留两位小数，加正负号）
-            const formatDiff = (val) => {
-              const str = (val > 0 ? "+" : "") + fmt(val);
-              const cls = val > 0 ? "text-up" : (val < 0 ? "text-down" : "text-flat");
-              return `<td class="${cls}" style="text-align:right; font-variant-numeric: tabular-nums; font-weight: 600;">${str}</td>`;
-            };
-
-            return `
+          ${displayItems.map((item, idx) => `
             <tr>
               <td>${idx + 1}</td>
               <td>${item.code}</td>
               <td>${item.name}</td>
-              <td style="text-align:right; font-variant-numeric: tabular-nums;">${fmt(item.value)}</td>
-              ${formatDiff(item.changeQuarter)}
-              ${formatDiff(item.changeMonth)}
-              ${formatDiff(item.changeWeek)}
-            </tr>`;
-          }).join("")}
+              ${numCell(item.value)}
+              ${diffCell(item.changeQuarter)}
+              ${diffCell(item.changeMonth)}
+              ${diffCell(item.changeWeek)}
+            </tr>`).join("")}
         </tbody>
       </table>
     `;
