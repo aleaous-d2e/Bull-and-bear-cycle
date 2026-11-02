@@ -73,7 +73,7 @@ jobs:
           TIMESTAMP=$(date +%s)
           DAY=$(TZ='Asia/Shanghai' date '+%d')
           
-          # 1. 构建基础信息
+          # 1. 判断标题（区分 push 和 定时任务，且判断是否失败）
           if [ "$EVENT_NAME" == "push" ]; then
             TITLE="✅ **代码推送成功**"
           elif [ "$IS_SUCCESS" == "true" ]; then
@@ -82,18 +82,22 @@ jobs:
             TITLE="❌ **部分任务执行失败**"
           fi
 
-          # 2. 月初提示 (1号到5号之间)
-          MONTH_MSG=""
+          # 2. 拼接消息内容（使用 $'\n' 确保正确换行）
+          MSG_CONTENT="$TITLE"$'\n'
+          MSG_CONTENT+="> **时间**：${CURRENT_TIME}"$'\n'
+          
+          # 月初提示 (1号到5号之间)
           if [ "$DAY" -le 5 ]; then
-            MONTH_MSG="\n> 📈 提示：触发月初综合月度任务"
+            MSG_CONTENT+="> 📈 **提示**：触发月初综合月度任务"$'\n'
+          fi
+          
+          MSG_CONTENT+=$'\n'"👉 [点击查看最新数据](${SITE_URL}?v=${TIMESTAMP})"
+          
+          # 如果是定时任务且执行失败，追加日志排查链接
+          if [ "$EVENT_NAME" != "push" ] && [ "$IS_SUCCESS" != "true" ]; then
+            MSG_CONTENT+=$'\n\n'"⚠️ [点击查看 Actions 日志排查失败原因](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})"
           fi
 
-          # 3. 生成消息内容
-          CONTENT="$TITLE\n> **时间**：$CURRENT_TIME$MONTH_MSG\n\n👉 [点击查看最新数据](${SITE_URL}?v=${TIMESTAMP})"
-          if [ "$IS_SUCCESS" == "false" ]; then
-            CONTENT="$CONTENT\n\n⚠️ [点击查看 Actions 日志排查失败原因](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})"
-          fi
-
-          # 4. 推送企业微信
-          JSON_PAYLOAD=$(jq -n --arg content "$CONTENT" '{msgtype: "markdown", markdown: {content: $content}}')
+          # 3. 推送企业微信
+          JSON_PAYLOAD=$(jq -n --arg content "$MSG_CONTENT" '{msgtype: "markdown", markdown: {content: $content}}')
           curl -s -H "Content-Type: application/json" -d "$JSON_PAYLOAD" "$WECOM_WEBHOOK"
