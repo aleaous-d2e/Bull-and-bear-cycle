@@ -1,0 +1,28 @@
+name: Cleanup Old Logs
+
+on:
+  schedule:
+    - cron: '0 3 * * 1' # 每周一 UTC 03:00（北京时间 11:00）
+  workflow_dispatch:
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    permissions:
+      actions: write # 必须有删除权限
+
+    steps:
+      - name: Delete 7 days old runs
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          # 获取 7 天前的日期
+          CUTOFF_DATE=$(date -u -d '7 days ago' +%Y-%m-%d)
+          echo "清理 $CUTOFF_DATE 之前的记录..."
+
+          # 清理数据抓取任务
+          gh run list --workflow "Auto Update Market Data and Notify" --created "<$CUTOFF_DATE" --limit 100 --json databaseId --jq '.[].databaseId' | xargs -r -n1 gh run delete
+
+          # 清理 Pages 构建任务
+          gh run list --workflow "pages build and deployment" --created "<$CUTOFF_DATE" --limit 100 --json databaseId --jq '.[].databaseId' | xargs -r -n1 gh run delete
