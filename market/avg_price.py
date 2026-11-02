@@ -6,7 +6,7 @@ A股全市场总市值 + 平均股价 —— 单日模式，写入 market_data.j
   - 最高优先级：先判断今天是否交易日
         - 今天不是交易日（周末/节假日）-> 立即结束脚本，不做任何文件读写
         - 今天是交易日                ->git 取 T-1 交易日数据
-  - 沪深：api.finance_valuation 拉目标日期总市值（沪 / 深 / 合计 / 只数）
+  - 沪深：api.finance_valuation 拉目标日期总市值（沪 / 深 / 合计）
   - 北交所：只请求一次，提取目标日期总市值（不做全量缓存）
   - 平均股价：api.daily 拉目标日全市场平均收盘价（close > 0 且 vol > 0）
   - 把结果合并进 market_data.js（同日期自动更新）
@@ -116,14 +116,16 @@ def get_ashare_total_mv(date_str, retries=2):
         try:
             df = api.finance_valuation(date_str.replace("-", ""))
             if df is None or df.empty:
-                return None, None, None, 0
+                # 【修改点 1】去掉末尾的 0，只返回 3 个值
+                return None, None, None
 
             code = df["code"].astype(str)
             sse_mv = float(df.loc[code.str.endswith((".SH", ".KSH")), "market_cap"].sum())
             szse_mv = float(df.loc[code.str.endswith((".SZ", ".GEM")), "market_cap"].sum())
             total = float(df["market_cap"].sum())
 
-            return total, sse_mv, szse_mv, len(df)
+            # 【修改点 2】去掉末尾的 len(df)，只返回 3 个值
+            return total, sse_mv, szse_mv
 
         except Exception as e:
             wait = 2 ** i
@@ -131,7 +133,8 @@ def get_ashare_total_mv(date_str, retries=2):
             if i < retries - 1:
                 time.sleep(wait)
 
-    return None, None, None, 0
+    # 【修改点 3】去掉末尾的 0，只返回 3 个值
+    return None, None, None
 
 
 # ==================== 平均股价：单日平均收盘价 ====================
@@ -231,6 +234,7 @@ def run_once():
         print(f"\n--- 开始处理 {date_str} ---")
 
         # ---------- 沪深 ----------
+        # 这里接收 3 个变量，与函数返回的 3 个值完美匹配
         ashare_total, sse_mv, szse_mv = get_ashare_total_mv(date_str)
         a_str = f"{ashare_total}" if ashare_total is not None else "None"
         print(f"[沪深] 合计 {a_str} | 沪 {sse_mv} | 深 {szse_mv} ")
@@ -239,6 +243,7 @@ def run_once():
         bse_mv = get_bse_mv(date_str)
 
         # ---------- 平均股价 ----------
+        # 内部使用 traded["close"].mean() 直接计算，不依赖股票数量
         avg_close = get_avg_close(date_str)
         print(f"[平均股价] 平均收盘价 {avg_close:.2f} 元" if avg_close is not None
               else "[平均股价] 无数据")
@@ -286,7 +291,7 @@ def main():
         sys.exit(1)
     except Exception as e:
         print(f"\n!!! 执行异常: {e}")
-        traceback.print_exc()  # 【新增这一行】这会打印出具体的报错文件和行号
+        traceback.print_exc()  # 打印出具体的报错文件和行号
         exit(1)  # 确保脚本以失败状态退出，让 Action 标红
 
 
