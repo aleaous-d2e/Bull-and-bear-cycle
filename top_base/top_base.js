@@ -372,12 +372,17 @@
 
 /* 各指数的趋势线配置 */
 const INDEX_TRENDS = {
-  '深证成指': [
+   '上证': [
+    { key: 'low',  name: '国运支撑', color: '#38bdf8', anchors: ['2008-10', '2024-02'], pick: 'low' },
+    { key: 'mix',  name: '低估定投', color: '#a78bfa', anchors: ['2008-09', '2019-01'], pick: 'low' },
+    { key: 'high', name: '高风险',   color: '#ef4444', anchors: ['2007-09', '2026-02'], pick: 'high' }
+  ],
+  '深证': [
     { key: 'low',  name: '国运支撑', color: '#38bdf8', anchors: ['2008-10', '2019-01'], pick: 'low' },
     { key: 'mix',  name: '低估定投', color: '#a78bfa', anchors: ['2008-09', '2014-03'], pick: 'low' },
     { key: 'high', name: '高风险',   color: '#ef4444', anchors: ['2008-03', '2021-02', '2026-06'], pick: 'high' }
   ],
-  '创业板指': [
+  '创业板': [
     { key: 'low',  name: '国运支撑', color: '#38bdf8', anchors: ['2012-12', '2024-02', '2024-09'], pick: 'low' },
     { key: 'mix',  name: '低估定投', color: '#a78bfa', anchors: ['2012-01', '2018-10', '2024-01'], pick: 'low' },
     { key: 'high', name: '高风险',   color: '#ef4444', anchors: ['2015-05', '2021-07'], pick: 'high' }
