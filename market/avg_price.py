@@ -25,6 +25,7 @@ import requests
 import pandas as pd
 import akshare as ak
 from zzshare.client import DataApi
+import traceback
 
 # ==================== 配置 ====================
 MARKET_DATA_JS = "market_data.js"
@@ -285,7 +286,8 @@ def main():
         sys.exit(1)
     except Exception as e:
         print(f"\n!!! 执行异常: {e}")
-        sys.exit(1)
+        traceback.print_exc()  # 【新增这一行】这会打印出具体的报错文件和行号
+        exit(1)  # 确保脚本以失败状态退出，让 Action 标红
 
 
 if __name__ == "__main__":
