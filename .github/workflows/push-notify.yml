@@ -37,7 +37,7 @@ jobs:
           ZZSHARE_TOKEN: ${{ secrets.ZZSHARE_TOKEN }}
         run: |
           pip install requests pandas zzshare akshare
-          python common/run_all.py
+          python common/central_control _dispatch.py
 
       # 4. 检查是否有数据更新
       - name: Check for changes
