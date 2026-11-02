@@ -1,0 +1,2 @@
+# 将生成的数据文件排除在语言统计之外
+*_data.js linguist-generated=true
