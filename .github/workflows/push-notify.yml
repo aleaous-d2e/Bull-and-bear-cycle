@@ -4,129 +4,96 @@ on:
   push:
     branches: [ main ]     # 当你手动 git push 时触发
   schedule:
-    - cron: '06 0 * * *'    # 每天北京时间 08:06 自动触发 (UTC 00:06)
-  workflow_dispatch:       # 【新增】允许你在 GitHub 网页 Actions 面板上手动点击按钮运行（用于测试或补数据）
+    - cron: '06 0 * * *'   # 每天北京时间 08:06 自动触发 (UTC 00:06)
+  workflow_dispatch:       # 允许在 GitHub 网页 Actions 面板上手动点击运行
 
 jobs:
   update-and-notify:
     runs-on: ubuntu-latest
     permissions:
-      contents: write          # 允许 Action 自动向仓库提交代码
-    concurrency:               # 加入并发控制，减少偶尔卡死
+      contents: write      # 允许 Action 自动向仓库提交代码
+    concurrency:           # 并发控制，减少偶尔卡死
       group: pages-deploy
-      cancel-in-progress: true 
+      cancel-in-progress: true
+
     steps:
       # 1. 拉取代码
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      # 2. 准备 Python 环境（仅在定时任务或手动触发时运行，push 代码时不跑）
+      # 2. 准备 Python 环境
       - name: Set up Python
         if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
         uses: actions/setup-python@v5
         with:
           python-version: '3.12'
 
-
-      # 3. 安装依赖并执行你的 Python 脚本
+      # 3. 运行总控脚本（继续执行后续步骤，允许部分失败）
       - name: Run Python Script
+        id: run_scripts
+        continue-on-error: true  # 即使某个子任务报错，也允许提交其他成功的代码
         if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
         env:
           ZZSHARE_TOKEN: ${{ secrets.ZZSHARE_TOKEN }}
         run: |
           pip install requests pandas zzshare akshare
-          
-          # 运行 market 文件夹下的主流程
-          cd market
-          python avg_price.py
-          
-          # 退回根目录，再进入 etf 文件夹运行流水线
-          cd ..
-          cd etf
-          python etf_share.py
+          python common/run_all.py
 
-      # 4. 检查文件是否真的被更新了
-      # 如果 Python 内部判断非交易日直接 return，文件不会变动，后续步骤会自动跳过
+      # 4. 检查是否有数据更新
       - name: Check for changes
         if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
         id: check_changes
         run: |
-          # 同时检查 market 和 etf 目录下是否有变动
-          if git diff --quiet market/market_data.js && git diff --quiet etf/; then
+          if [ -z "$(git status --porcelain)" ]; then
             echo "changed=false" >> $GITHUB_OUTPUT
-            echo "没有数据更新（可能是非交易日或接口无数据）"
           else
             echo "changed=true" >> $GITHUB_OUTPUT
-            echo "检测到数据更新！"
           fi
 
-      # 5. 提交并推送更改（仅在定时任务/手动触发，且检测到文件变化时执行）
+      # 5. 提交并推送更改
       - name: Commit and Push Changes
         if: (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') && steps.check_changes.outputs.changed == 'true'
         run: |
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
-          # 将 market 和 etf 文件夹的变更一起加入暂存区
-          git add market/market_data.js etf/
-          
-          # [skip ci] 告诉 GitHub 机器人提交的代码不要再次触发 Actions，完美避免死循环
+          git add .
           git commit -m "Auto update market data [skip ci]"
           git push
 
-      # 6. 发送企业微信成功通知
+      # ================= 发送通知 =================
       - name: Send WeCom Notification
-        if: github.event_name == 'push' || ((github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') && steps.check_changes.outputs.changed == 'true')
+        if: always() && (github.event_name == 'push' || steps.check_changes.outputs.changed == 'true')
         env:
           WECOM_WEBHOOK: ${{ secrets.WECOM_WEBHOOK }}
           SITE_URL: ${{ secrets.SITE_URL }}
           EVENT_NAME: ${{ github.event_name }}
+          IS_SUCCESS: ${{ steps.run_scripts.outcome == 'success' }}
         run: |
           CURRENT_TIME=$(TZ='Asia/Shanghai' date '+%Y-%m-%d %H:%M:%S')
           TIMESTAMP=$(date +%s)
-
-          if [ "$EVENT_NAME" == "schedule" ] || [ "$EVENT_NAME" == "workflow_dispatch" ]; then
-            MSG_TITLE="✅ **数据更新提示**"
+          DAY=$(TZ='Asia/Shanghai' date '+%d')
+          
+          # 1. 构建基础信息
+          if [ "$EVENT_NAME" == "push" ]; then
+            TITLE="✅ **代码推送成功**"
+          elif [ "$IS_SUCCESS" == "true" ]; then
+            TITLE="✅ **数据更新提示**"
           else
-            MSG_TITLE="✅ **代码推送成功，数据已更新**"
+            TITLE="❌ **部分任务执行失败**"
           fi
 
-          JSON_PAYLOAD=$(jq -n \
-            --arg title "$MSG_TITLE" \
-            --arg time "$CURRENT_TIME" \
-            --arg url "${SITE_URL}?v=${TIMESTAMP}" \
-            '{
-              msgtype: "markdown",
-              markdown: {
-                content: "\($title)\n> **更新时间**：\($time)\n\n👉 [点击查看最新数据](\($url))"
-              }
-            }')
-          
-          HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" -H "Content-Type: application/json" -d "$JSON_PAYLOAD" "$WECOM_WEBHOOK")
-          
-          echo "企业微信 API 返回状态码: $HTTP_CODE"
-          
-          if [ "$HTTP_CODE" -ne 200 ]; then
-            echo "推送失败！"
-            curl -s -H "Content-Type: application/json" -d "$JSON_PAYLOAD" "$WECOM_WEBHOOK"
-            exit 1
+          # 2. 月初提示 (1号到5号之间)
+          MONTH_MSG=""
+          if [ "$DAY" -le 5 ]; then
+            MONTH_MSG="\n> 📈 提示：触发月初综合月度任务"
           fi
-          echo "推送成功！"
 
-      # 7. 失败告警通知
-      - name: Send Failure Notification
-        if: failure()
-        env:
-          WECOM_WEBHOOK: ${{ secrets.WECOM_WEBHOOK }}
-        run: |
-          CURRENT_TIME=$(TZ='Asia/Shanghai' date '+%Y-%m-%d %H:%M:%S')
-          JSON_PAYLOAD=$(jq -n \
-            --arg time "$CURRENT_TIME" \
-            --arg url "https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}" \
-            '{
-              msgtype: "markdown",
-              markdown: {
-                content: "❌ **定时任务执行失败**\n> **时间**：\($time)\n> **原因**：抓取异常或接口返回空数据，已拦截写入。\n\n👉 [点击查看 GitHub Actions 日志排查](\($url))"
-              }
-            }')
-          
+          # 3. 生成消息内容
+          CONTENT="$TITLE\n> **时间**：$CURRENT_TIME$MONTH_MSG\n\n👉 [点击查看最新数据](${SITE_URL}?v=${TIMESTAMP})"
+          if [ "$IS_SUCCESS" == "false" ]; then
+            CONTENT="$CONTENT\n\n⚠️ [点击查看 Actions 日志排查失败原因](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})"
+          fi
+
+          # 4. 推送企业微信
+          JSON_PAYLOAD=$(jq -n --arg content "$CONTENT" '{msgtype: "markdown", markdown: {content: $content}}')
           curl -s -H "Content-Type: application/json" -d "$JSON_PAYLOAD" "$WECOM_WEBHOOK"
