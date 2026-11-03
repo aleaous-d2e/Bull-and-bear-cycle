@@ -2,10 +2,10 @@ name: Auto Update Market Data and Notify
 
 on:
   push:
-    branches: [ main ]     # 当你手动 git push 时触发
-  schedule:
-    - cron: '06 0 * * *'   # 每天北京时间 08:06 自动触发 (UTC 00:06)
-  workflow_dispatch:       # 允许在 GitHub 网页 Actions 面板上手动点击运行
+    branches: [ main ]     # 手动 push 代码时触发
+  # schedule:
+  #   - cron: '06 0 * * *' # 🔴 已注释，交由 cron-job.org 触发
+  workflow_dispatch:       # 允许 cron-job.org 或 网页手动触发
 
 jobs:
   update-and-notify:
@@ -23,16 +23,16 @@ jobs:
 
       # 2. 准备 Python 环境
       - name: Set up Python
-        if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+        if: github.event_name == 'workflow_dispatch'
         uses: actions/setup-python@v5
         with:
           python-version: '3.12'
 
-      # 3. 运行总控脚本（继续执行后续步骤，允许部分失败）
+      # 3. 运行总控脚本
       - name: Run Python Script
         id: run_scripts
-        continue-on-error: true  # 即使某个子任务报错，也允许提交其他成功的代码
-        if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+        continue-on-error: true  # 允许部分失败，继续下一步
+        if: github.event_name == 'workflow_dispatch'
         env:
           ZZSHARE_TOKEN: ${{ secrets.ZZSHARE_TOKEN }}
         run: |
@@ -41,7 +41,7 @@ jobs:
 
       # 4. 检查是否有数据更新
       - name: Check for changes
-        if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+        if: github.event_name == 'workflow_dispatch'
         id: check_changes
         run: |
           if [ -z "$(git status --porcelain)" ]; then
@@ -50,9 +50,9 @@ jobs:
             echo "changed=true" >> $GITHUB_OUTPUT
           fi
 
-      # 5. 提交并推送更改
+      # 5. 提交并推送更改（只有 changed == 'true' 才执行）
       - name: Commit and Push Changes
-        if: (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') && steps.check_changes.outputs.changed == 'true'
+        if: github.event_name == 'workflow_dispatch' && steps.check_changes.outputs.changed == 'true'
         run: |
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
@@ -62,7 +62,11 @@ jobs:
 
       # ================= 发送通知 =================
       - name: Send WeCom Notification
-        if: always() && (github.event_name == 'push' || steps.check_changes.outputs.changed == 'true')
+        # 🟢 核心修改：满足以下任一条件才发通知：
+        # 1. 是 push 触发的
+        # 2. 定时任务抓到了新数据 (changed == 'true')
+        # 3. 脚本执行失败了 (即使没抓到数据，也要发个报错)
+        if: always() && (github.event_name == 'push' || steps.check_changes.outputs.changed == 'true' || steps.run_scripts.outcome != 'success')
         env:
           WECOM_WEBHOOK: ${{ secrets.WECOM_WEBHOOK }}
           SITE_URL: ${{ secrets.SITE_URL }}
@@ -73,20 +77,19 @@ jobs:
           TIMESTAMP=$(date +%s)
           DAY=$(TZ='Asia/Shanghai' date '+%d')
           
-          # 1. 判断标题（区分 push 和 定时任务，且判断是否失败）
+          # 1. 判断标题
           if [ "$EVENT_NAME" == "push" ]; then
             TITLE="✅ **代码推送成功**"
           elif [ "$IS_SUCCESS" == "true" ]; then
             TITLE="✅ **数据更新提示**"
           else
-            TITLE="❌ **部分任务执行失败**"
+            TITLE="❌ **任务执行失败**"
           fi
 
-          # 2. 拼接消息内容（使用 $'\n' 确保正确换行）
+          # 2. 拼接消息内容
           MSG_CONTENT="$TITLE"$'\n'
           MSG_CONTENT+="> **时间**：${CURRENT_TIME}"$'\n'
           
-          # 月初提示 (1号到5号之间)
           if [ "$DAY" -le 5 ]; then
             MSG_CONTENT+="> 📈 **提示**：触发月初综合月度任务"$'\n'
           fi
