@@ -90,7 +90,7 @@ jobs:
           MSG_CONTENT="$TITLE"$'\n'
           MSG_CONTENT+="> **时间**：${CURRENT_TIME}"$'\n'
           
-          if [ "$DAY" -le 5 ]; then
+          if [ "10$DAY" -eq 1]; then
             MSG_CONTENT+="> 📈 **提示**：触发月初综合月度任务"$'\n'
           fi
           

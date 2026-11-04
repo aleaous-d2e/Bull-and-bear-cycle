@@ -21,12 +21,16 @@ jobs:
           CUTOFF_DATE=$(date -u -d '7 days ago' +%Y-%m-%d)
           echo "开始清理 $CUTOFF_DATE 之前的记录..."
 
-          # 1. 清理数据抓取任务（末尾加 || true 防止某次删除失败导致整个任务红叉）
+          # 1. 清理数据抓取任务
           echo "清理 Auto Update Market Data..."
           gh run list --workflow "Auto Update Market Data and Notify" --created "<$CUTOFF_DATE" --limit 100 --json databaseId --jq '.[].databaseId' | xargs -r -n1 gh run delete || true
 
-          # 2. 清理 Pages 构建任务（即使找不到这个工作流，也不会报错退出）
+          # 2. 清理 Pages 构建任务
           echo "清理 Pages 构建任务..."
           gh run list --workflow "pages build and deployment" --created "<$CUTOFF_DATE" --limit 100 --json databaseId --jq '.[].databaseId' | xargs -r -n1 gh run delete || true
+          
+          # 3. 清理自己 (Cleanup Old Logs)
+          echo "清理 Cleanup Old Logs 自身的记录..."
+          gh run list --workflow "Cleanup Old Logs" --created "<$CUTOFF_DATE" --limit 100 --json databaseId --jq '.[].databaseId' | xargs -r -n1 gh run delete || true
           
           echo "清理完成！"
