@@ -525,10 +525,11 @@ def fetch_sse_batch(code_dates: dict[str, set[str]]) -> dict[str, list[dict]]:
     return results
 
 
+import requests  # 确保文件顶部有导入 requests
+
+
 def fetch_szse_batch(code_dates: dict[str, set[str]]) -> dict[str, list[dict]]:
-    """SZSE：一次性拉取合并日期范围的全市场数据，再按代码切片。
-    深交所接口单次最多 6 个月，按 180 天分段。
-    """
+    """SZSE：使用 akshare 官方接口，但加上重试和详细报错。"""
     results: dict[str, list[dict]] = {c: [] for c in code_dates}
     all_dates = sorted({d for s in code_dates.values() for d in s})
     if not all_dates:
@@ -541,27 +542,47 @@ def fetch_szse_batch(code_dates: dict[str, set[str]]) -> dict[str, list[dict]]:
     cursor = start_d
     while cursor <= end_d:
         seg_end = min(cursor + timedelta(days=180), end_d)
-        try:
-            df = ak.fund_scale_daily_szse(
-                start_date=cursor.strftime("%Y%m%d"),
-                end_date=seg_end.strftime("%Y%m%d"),
-                symbol="ETF",
-            )
-            if df is not None and not df.empty:
-                frames.append(df)
-        except Exception:
-            pass
+        success = False
+
+        # 尝试 3 次
+        for attempt in range(3):
+            try:
+                df = ak.fund_scale_daily_szse(
+                    start_date=cursor.strftime("%Y%m%d"),
+                    end_date=seg_end.strftime("%Y%m%d"),
+                    symbol="ETF",
+                )
+                if df is not None and not df.empty:
+                    frames.append(df)
+                    success = True
+                    break  # 成功则跳出重试循环
+                else:
+                    print(f"  [警告] 深交所 {cursor}~{seg_end} 返回为空 (尝试 {attempt + 1}/3)")
+            except Exception as e:
+                print(f"  [警告] 深交所 {cursor}~{seg_end} 请求异常 (尝试 {attempt + 1}/3): {type(e).__name__}: {e}")
+
+            if attempt < 2:
+                time.sleep(3)  # 失败后等 3 秒再试
+
+        if not success:
+            print(f"  [错误] 深交所 {cursor}~{seg_end} 彻底失败。")
+
         cursor = seg_end + timedelta(days=1)
 
     if not frames:
+        print("  [错误] 深交所所有分段均无数据，返回空结果！")
         return results
 
+    # --- 以下数据清洗逻辑保持不变 ---
     df = pd.concat(frames, ignore_index=True)
     code_col = "基金代码" if "基金代码" in df.columns else "代码"
     df["_code"] = df[code_col].astype(str).str.strip().str.zfill(6)
     date_col = next((c for c in ("日期", "date", "净值日期") if c in df.columns), None)
+
     if date_col is None:
+        print(f"  [错误] 深交所返回的列名不匹配，实际列名: {df.columns.tolist()}")
         raise RuntimeError("深交所区间结果未找到日期列。")
+
     df["_date"] = pd.to_datetime(df[date_col]).dt.strftime("%Y-%m-%d")
 
     for c, dates in code_dates.items():
@@ -572,8 +593,8 @@ def fetch_szse_batch(code_dates: dict[str, set[str]]) -> dict[str, list[dict]]:
         sub = sub.dropna(subset=["shares_yi"]).drop_duplicates("_date")
         for _, r in sub.iterrows():
             results[c].append({"date": r["_date"], "shares_yi": float(r["shares_yi"])})
-    return results
 
+    return results
 
 def save_js(path: str, var_name: str, payload: dict):
     """把 payload 写为 window.<var_name> = {...}; 形式。"""
