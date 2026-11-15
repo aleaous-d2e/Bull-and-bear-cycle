@@ -1,35 +1,33 @@
 name: Cleanup Old Logs
 
 on:
-  schedule:
-    - cron: '0 3 * * 1' # 每周一 UTC 03:00（北京时间 11:00），允许延迟，无影响
-  workflow_dispatch:
+  workflow_dispatch: # 为了方便测试，先改成手动触发
 
 jobs:
   cleanup:
     runs-on: ubuntu-latest
     permissions:
-      actions: write # 必须有删除权限
-      contents: read # 读取仓库内容权限
+      actions: write
+      contents: read
 
     steps:
-      - name: Delete 7 days old runs
+      - name: Debug and Delete
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GH_REPO: ${{ github.repository }}
         run: |
-          # 获取 7 天前的 ISO 8601 标准时间（例如：2023-10-20T00:00:00Z）
           CUTOFF_TIME=$(date -u -d '7 days ago' +%Y-%m-%dT%H:%M:%SZ)
-          echo "开始清理早于 $CUTOFF_TIME 的记录..."
-
-          # 1. 直接拉取最近 500 条 workflow run 的信息
-          # 记录包含：运行ID、工作流名称、创建时间
-          echo "正在获取最近的工作流记录..."
-          RUNS_JSON=$(gh run list --limit 100 --json databaseId,workflowName,createdAt)
+          echo "🕒 当前截止时间: $CUTOFF_TIME"
           
-          # 2. 使用 jq 在本地进行筛选
-          # 条件 a: createdAt 必须小于 CUTOFF_TIME
-          # 条件 b: workflowName 必须匹配我们指定的三个工作流（使用正则，确保名称完全一致）
+          # 1. 拉取最近 1000 条记录（增大拉取量，确保旧记录被包含）
+          echo "📥 正在获取最近 1000 条记录..."
+          RUNS_JSON=$(gh run list --limit 1000 --json databaseId,workflowName,createdAt,status)
+          
+          # --- 诊断点 1：打印获取到的前几个 JSON 条目，看看长什么样 ---
+          echo "🔍 获取到的 JSON 前 5 条数据预览："
+          echo "$RUNS_JSON" | jq '.[0:5]'
+
+          # 2. 提取需要删除的 ID
           RUN_IDS=$(echo "$RUNS_JSON" | jq -r --arg CUTOFF "$CUTOFF_TIME" '
             .[] | 
             select(.createdAt < $CUTOFF) | 
@@ -37,20 +35,24 @@ jobs:
             .databaseId
           ')
 
-          # 3. 判断是否有需要删除的记录
+          # --- 诊断点 2：查看筛选出的 ID 列表 ---
+          echo "🎯 筛选出的待删除 ID 列表："
           if [ -z "$RUN_IDS" ]; then
-            echo "没有找到符合条件（7天前）的旧记录，退出清理。"
-            exit 0
+            echo "❌ 警告：没有匹配到任何需要删除的 ID！"
+          else
+            echo "$RUN_IDS"
           fi
 
-          echo "找到以下待删除的运行 ID："
-          echo "$RUN_IDS"
-
-          # 4. 循环删除
+          # 3. 执行删除（去掉静默，强制打印错误码）
           for RUN_ID in $RUN_IDS; do
-            echo "正在删除 Run ID: $RUN_ID"
-            # 使用 gh api 直接发起 DELETE 请求，如果失败会打印 HTTP 状态码
-            gh api -X DELETE "repos/$GH_REPO/actions/runs/$RUN_ID" --silent || echo "❌ 删除失败: $RUN_ID"
+            echo "--------------------------------------------------"
+            echo "正在尝试删除 Run ID: $RUN_ID"
+            # 使用 gh api 删除，打印完整的 HTTP 响应（如果出错，这里会显示）
+            if gh api -X DELETE "repos/$GH_REPO/actions/runs/$RUN_ID" --verbose; then
+              echo "✅ 成功删除 $RUN_ID"
+            else
+              echo "❌ 删除失败 $RUN_ID，请查看上方输出中的 HTTP 错误信息。"
+            fi
           done
           
-          echo "✅ 所有清理任务完成！"
+          echo "✅ 任务结束"
