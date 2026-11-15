@@ -216,7 +216,13 @@ function buildSeries(ashare) {
     const price = r.price != null ? Number(r.price) : null;
     const o = num(r.open, price), h = num(r.high, price), l = num(r.low, price), c = num(r.close, price);
 
-    out.push({ date, mv: r.ashare_total, gdp, price, open: o, high: h, low: l, close: c, ratio: r.ashare_total / gdp });
+    // 透传 is_mock 标记
+    out.push({
+      date, mv: r.ashare_total, gdp, price,
+      open: o, high: h, low: l, close: c,
+      ratio: r.ashare_total / gdp,
+      is_mock: r.is_mock === true
+    });
   }
   out.sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
   return out;
@@ -229,7 +235,7 @@ function aggregateSeries(daily, gran) {
   for (const r of daily) {
     let key;
     if (gran === 'month') key = r.date.slice(0, 7);
-    else if (gran === 'week') key = getWeekKey(r.date); // 复用 common.js 的周一起点计算
+    else if (gran === 'week') key = getWeekKey(r.date);
     groups.set(key, r);
   }
   const arr = Array.from(groups.values());
@@ -272,7 +278,6 @@ function renderKPI() {
   const gdpVal = GDP_ANNUAL[yearNow];
   $('kpi-gdp').innerHTML = (gdpVal / 10000).toFixed(2) + '<small>万亿</small>';
 
-  // 无上一年数据时传 null，由 setDelta 统一渲染占位符
   const gdpBase = GDP_ANNUAL[yearBase];
   setDelta($('kpi-gdp-yoy'), '同比 ' + yearBase + '年 ', gdpBase ? (gdpVal / gdpBase - 1) * 100 : null);
 
@@ -311,6 +316,19 @@ function insertNoteBar() {
     const card = priceCard.closest('.card');
     if (card && card.parentNode) {
       card.parentNode.insertBefore(noteBar, card.nextSibling);
+    }
+  }
+
+  // 动态检测最近是否有模拟数据
+  const hasMock = dailySeries.some(s => s.is_mock);
+  if (hasMock) {
+    const warnEl = document.getElementById('mock-warning');
+    if (!warnEl) {
+      const warn = document.createElement('div');
+      warn.id = 'mock-warning';
+      warn.style.cssText = 'color: #d97706; margin-top: 8px; font-weight: 500; background: rgba(245,158,11,.1); padding: 4px 8px; border-radius: 4px; display: inline-block; border: 1px solid rgba(245,158,11,.3);';
+      warn.innerHTML = '⚠️ 提示：图表中部分日期因接口延迟采用了历史等差推算的模拟值（悬停可见“模拟值”标签），待源数据恢复后将自动覆盖。';
+      noteBar.appendChild(warn);
     }
   }
 }
@@ -355,7 +373,11 @@ function renderChart() {
       const d = params[0].axisValue, r = seriesIndex.get(d);
       if (!r) return '';
       const v = valuation(r.ratio);
-      let html = `<div style="font-weight:600;margin-bottom:4px;font-size:13px;">${d}</div>`;
+
+      // 如果是模拟值，加一个醒目的红框标签
+      const mockTag = r.is_mock ? '<span style="color:#ef4444;font-size:10px;border:1px solid #ef4444;padding:0 4px;border-radius:4px;margin-left:4px;">模拟值</span>' : '';
+
+      let html = `<div style="font-weight:600;margin-bottom:4px;font-size:13px;">${d} ${mockTag}</div>`;
       html += `<div style="font-size:12px;color:${theme.lineBlue};">市值/GDP：${r.ratio.toFixed(3)}</div>`;
       if (r.price != null) html += `<div style="font-size:12px;color:${theme.lineYellow};">平均股价：${r.price.toFixed(2)} 元</div>`;
       else html += `<div style="font-size:12px;color:${theme.text};">平均股价：暂无数据</div>`;

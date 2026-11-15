@@ -116,7 +116,6 @@ def get_ashare_total_mv(date_str, retries=2):
         try:
             df = api.finance_valuation(date_str.replace("-", ""))
             if df is None or df.empty:
-                # 【修改点 1】去掉末尾的 0，只返回 3 个值
                 return None, None, None
 
             code = df["code"].astype(str)
@@ -124,7 +123,6 @@ def get_ashare_total_mv(date_str, retries=2):
             szse_mv = float(df.loc[code.str.endswith((".SZ", ".GEM")), "market_cap"].sum())
             total = float(df["market_cap"].sum())
 
-            # 【修改点 2】去掉末尾的 len(df)，只返回 3 个值
             return total, sse_mv, szse_mv
 
         except Exception as e:
@@ -133,7 +131,6 @@ def get_ashare_total_mv(date_str, retries=2):
             if i < retries - 1:
                 time.sleep(wait)
 
-    # 【修改点 3】去掉末尾的 0，只返回 3 个值
     return None, None, None
 
 
@@ -194,10 +191,10 @@ def save_market_data(data):
 def run_once():
     # ---------- 最高优先级：判断今天是否交易日 ----------
     # 一旦不是交易日，立即结束脚本，不读写任何文件、不调用后续接口
-    today_str = datetime.date.today().strftime("%Y-%m-%d")
-    if not is_trade_date(today_str):
-        print(f"[结束] 今天 {today_str} 不是交易日，跳过（不修改任何文件）")
-        return
+    # today_str = datetime.date.today().strftime("%Y-%m-%d")
+    # if not is_trade_date(today_str):
+    #     print(f"[结束] 今天 {today_str} 不是交易日，跳过（不修改任何文件）")
+    #     return
 
     # ---------- 定位 T-1 交易日 ----------
     target_date = get_prev_trade_date()
@@ -215,26 +212,19 @@ def run_once():
     # 无论是否补缺，T-1当天必须是最新的
     dates_to_fetch = {target_date}
 
-    if existing_dates:
-        latest_date = max(existing_dates)
-        # 如果库里存的最新数据，比 T-1 还要老，说明中间漏掉了真实交易日
-        if latest_date < target_date:
-            print(f"[检查] 库中最新为 {latest_date}，落后于 T-1 ({target_date})，准备补全中间缺失的交易日")
-            # 获取两个日期之间的所有真实交易日
-            dates_to_fetch.update(
-                d for d in get_trade_dates(latest_date, target_date)
-                if d not in existing_dates
-            )
+    # 【修复逻辑】只要库中发现 is_mock=True 的模拟数据，就加入重跑队列强制重试
+    for d, record in data.get("ashare", {}).items():
+        if record.get("is_mock") is True:
+            dates_to_fetch.add(d)
 
     dates_to_fetch = sorted(dates_to_fetch)
-    print(f"[执行] 本次需要抓取的交易日列表: {dates_to_fetch}")
+    print(f"[执行] 本次需要抓取或重试的交易日列表: {dates_to_fetch}")
 
-    # 遍历执行抓取（通常只有1天，只有在断档恢复时才会有多天）
+    # 遍历执行抓取
     for date_str in dates_to_fetch:
         print(f"\n--- 开始处理 {date_str} ---")
 
         # ---------- 沪深 ----------
-        # 这里接收 3 个变量，与函数返回的 3 个值完美匹配
         ashare_total, sse_mv, szse_mv = get_ashare_total_mv(date_str)
         a_str = f"{ashare_total}" if ashare_total is not None else "None"
         print(f"[沪深] 合计 {a_str} | 沪 {sse_mv} | 深 {szse_mv} ")
@@ -243,32 +233,88 @@ def run_once():
         bse_mv = get_bse_mv(date_str)
 
         # ---------- 平均股价 ----------
-        # 内部使用 traded["close"].mean() 直接计算，不依赖股票数量
         avg_close = get_avg_close(date_str)
         print(f"[平均股价] 平均收盘价 {avg_close:.2f} 元" if avg_close is not None
               else "[平均股价] 无数据")
 
-        # ---------- 【严格校验】如果核心数据抓不到，立刻报错，防止脏数据覆盖 ----------
-        if ashare_total is None or ashare_total <= 0:
-            raise ValueError(f"[错误] {date_str} 沪深总市值获取失败，终止写入！")
-        if avg_close is None or avg_close <= 0:
-            raise ValueError(f"[错误] {date_str} 平均股价获取失败，终止写入！")
+        # ---------- 【修复逻辑】精细化容错处理 ----------
+        if ashare_total is None or ashare_total <= 0 or avg_close is None or avg_close <= 0:
+            print(f"⚠️ [警告] {date_str} 数据存在缺失，启用推断兜底...")
 
-        # ---------- 组装记录（北交所市值并入 ashare_total，只保留三所合计） ----------
+            existing_keys = sorted([k for k in data.get("ashare", {}).keys() if k < date_str])
+
+            # 情况 1：均价抓到了，总市值没抓到
+            if avg_close is not None and avg_close > 0 and len(existing_keys) >= 1:
+                last_day = existing_keys[-1]
+                last_record = data["ashare"][last_day]
+
+                # 用真实的今日均价与昨日均价计算涨跌幅
+                price_chg = (avg_close / last_record["price"]) - 1
+                price_chg = max(-0.15, min(0.15, price_chg))  # 限制极端情况
+
+                # 推算今天的三所合计总市值
+                mv_mock = round(last_record["ashare_total"] * (1 + price_chg))
+
+                v_mock = round(avg_close, 2)
+                record = {
+                    "ashare_total": mv_mock,
+                    "price": v_mock, "open": v_mock, "high": v_mock, "low": v_mock, "close": v_mock,
+                    "is_mock": True
+                }
+                data.setdefault("ashare", {})[date_str] = record
+                print(f"⚠️ [兜底] 均价抓取成功({v_mock}元)，据此推算总市值：{mv_mock}")
+                continue
+
+            # 情况 2：均价和总市值都没抓到，才使用前两日差分推算
+            elif len(existing_keys) >= 2:
+                last_day = existing_keys[-1]
+                prev_day = existing_keys[-2]
+
+                last_record = data["ashare"][last_day]
+                prev_record = data["ashare"][prev_day]
+
+                price_diff = last_record["price"] - prev_record["price"]
+                mv_diff = last_record["ashare_total"] - prev_record["ashare_total"]
+
+                v_mock = round(last_record["price"] + price_diff, 2)
+                mv_mock = round(last_record["ashare_total"] + mv_diff)
+
+                if v_mock <= 0: v_mock = last_record["price"]
+                if mv_mock <= 0: mv_mock = last_record["ashare_total"]
+
+                record = {
+                    "ashare_total": mv_mock,
+                    "price": v_mock, "open": v_mock, "high": v_mock, "low": v_mock, "close": v_mock,
+                    "is_mock": True
+                }
+                data.setdefault("ashare", {})[date_str] = record
+                print(f"⚠️ [兜底] 均价与总市值均缺失，按历史差分推算：{v_mock}")
+                continue
+
+            elif len(existing_keys) == 1:
+                last_record = data["ashare"][existing_keys[-1]]
+                record = last_record.copy()
+                record["is_mock"] = True
+                data.setdefault("ashare", {})[date_str] = record
+                print(f"⚠️ [兜底] 历史数据不足，直接沿用 {existing_keys[-1]} 的数据模拟 {date_str}")
+                continue
+            else:
+                print(f"❌ [错误] 找不到历史数据做兜底，跳过 {date_str}。")
+                continue
+
+        # ---------- 组装记录（如果抓取成功，直接覆盖掉之前的 is_mock 假数据） ----------
         total_mv = ashare_total + (bse_mv or 0.0)
         record = {
             "ashare_total": round(total_mv),
         }
 
-        # 只取平均收盘价，open/high/low/close/price 统一写该值
-        v = round(avg_close, 4)
+        v = round(avg_close, 2)
         record.update(price=v, open=v, high=v, low=v, close=v)
 
-        # ---------- 合并进内存数据 ----------
         data.setdefault("ashare", {})[date_str] = record
 
         b_str = f"{bse_mv:.2f}" if bse_mv is not None else "None"
-        print(f"[{date_str}] 沪深 {a_str} | 北交所 {b_str} | 合计 {total_mv}")
+        print(f"✅ [{date_str}] 已获取真实数据: 沪深 {a_str} | 北交所 {b_str} | 合计 {total_mv}")
 
     # ---------- 统一写入文件 ----------
     now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -291,8 +337,8 @@ def main():
         sys.exit(1)
     except Exception as e:
         print(f"\n!!! 执行异常: {e}")
-        traceback.print_exc()  # 打印出具体的报错文件和行号
-        exit(1)  # 确保脚本以失败状态退出，让 Action 标红
+        traceback.print_exc()
+        exit(1)
 
 
 if __name__ == "__main__":
