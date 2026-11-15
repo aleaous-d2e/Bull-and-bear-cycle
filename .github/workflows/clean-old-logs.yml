@@ -9,7 +9,8 @@ jobs:
   cleanup:
     runs-on: ubuntu-latest
     permissions:
-      actions: write # 必须有删除权限
+      actions: write # 必须有删除工作流运行的权限
+      contents: read # 推荐的只读权限，最小化原则
 
     steps:
       - name: Delete 7 days old runs
@@ -21,16 +22,35 @@ jobs:
           CUTOFF_DATE=$(date -u -d '7 days ago' +%Y-%m-%d)
           echo "开始清理 $CUTOFF_DATE 之前的记录..."
 
-          # 1. 清理数据抓取任务
-          echo "清理 Auto Update Market Data..."
-          gh run list --workflow "Auto Update Market Data and Notify" --created "<$CUTOFF_DATE" --limit 100 --json databaseId --jq '.[].databaseId' | xargs -r -n1 gh run delete || true
+          # 定义需要清理的工作流列表（建议尽量使用文件名，如 pages-build-deployment）
+          WORKFLOWS=(
+            "Auto Update Market Data and Notify"
+            "pages-build-deployment"
+            "clean-old-logs.yml"
+          )
 
-          # 2. 清理 Pages 构建任务
-          echo "清理 Pages 构建任务..."
-          gh run list --workflow "pages build and deployment" --created "<$CUTOFF_DATE" --limit 100 --json databaseId --jq '.[].databaseId' | xargs -r -n1 gh run delete || true
+          for WORKFLOW in "${WORKFLOWS[@]}"; do
+            echo "=========================================="
+            echo "开始清理工作流: $WORKFLOW"
+            
+            while true; do
+              # 获取 1 页（最多 100 条）待删除的运行 ID
+              # 注意：--created 必须使用 "..日期" 的格式，表示该日期之前（含）
+              RUN_IDS=$(gh run list --workflow "$WORKFLOW" --created "..$CUTOFF_DATE" --limit 100 --json databaseId --jq '.[].databaseId' 2>/dev/null || true)
+              
+              # 如果没有获取到数据，说明该工作流的旧记录已清理完毕
+              if [ -z "$RUN_IDS" ]; then
+                echo "工作流 $WORKFLOW 清理完成。"
+                break
+              fi
+              
+              # 批量删除这批记录
+              echo "$RUN_IDS" | xargs -r -n1 gh run delete
+              echo "已删除一批记录，继续检查剩余记录..."
+              
+              # 为了防止过于频繁的 API 请求，稍微等待一下（可选）
+              sleep 1
+            done
+          done
           
-          # 3. 清理自己 (Cleanup Old Logs)
-          echo "清理 Cleanup Old Logs 自身的记录..."
-          gh run list --workflow "Cleanup Old Logs" --created "<$CUTOFF_DATE" --limit 100 --json databaseId --jq '.[].databaseId' | xargs -r -n1 gh run delete || true
-          
-          echo "清理完成！"
+          echo "所有清理任务完成！"
