@@ -16,43 +16,46 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GH_REPO: ${{ github.repository }}
         run: |
-          # 获取 7 天前的 ISO 8601 标准时间（例如：2026-11-08T02:00:21Z）
           CUTOFF_TIME=$(date -u -d '7 days ago' +%Y-%m-%dT%H:%M:%SZ)
           echo "🕒 开始清理早于 $CUTOFF_TIME 的记录..."
 
-          # 使用 API 直接过滤时间，并让 --paginate 自动翻页获取所有旧记录
-          # 注意这里用 name 字段，且精确匹配横杠名称 pages-build-deployment
+          # 注意：这里使用 %3C 代替 <，防止被 Shell 或 HTTP 解析器忽略
           echo "🔍 正在查询旧记录..."
-          RUN_IDS=$(gh api "repos/$GH_REPO/actions/runs?created=<${CUTOFF_TIME}" --paginate --jq '
+
+          # 1. 先探测服务端到底有多少条旧记录
+          COUNT=$(gh api "repos/$GH_REPO/actions/runs?created=%3C${CUTOFF_TIME}" --jq '.total_count')
+          echo "📊 服务端返回：总共有 $COUNT 条早于该时间的工作流记录。"
+
+          if [ "$COUNT" -eq 0 ]; then
+            echo "✅ API 确认没有旧记录，结束。"
+            exit 0
+          fi
+
+          # 2. 筛选目标 ID（加入 test("pages|Auto Update|Cleanup"; "i") 作为正则兜底，防止名称里横杠空格不一致）
+          echo "🎯 正在筛选需要清理的工作流 ID..."
+          RUN_IDS=$(gh api "repos/$GH_REPO/actions/runs?created=%3C${CUTOFF_TIME}" --paginate --jq '
             .workflow_runs[] | 
             select(
               .name == "Auto Update Market Data and Notify" or 
               .name == "pages-build-deployment" or 
-              .name == "Cleanup Old Logs"
+              .name == "pages build and deployment" or
+              .name == "Cleanup Old Logs" or
+              (.name | test("pages|Auto Update|Cleanup"; "i"))
             ) | 
             .id
           ')
 
-          # 判断是否真的查到了数据
           if [ -z "$RUN_IDS" ]; then
-            echo "✅ 没有找到 7 天前的目标工作流记录，无需清理。"
+            echo "⚠️ 虽然有旧记录，但没有找到属于目标工作流的记录。"
             exit 0
           fi
 
-          echo "🎯 成功找到以下待删除的 Run ID："
-          echo "$RUN_IDS"
-          echo "--------------------------------------------------"
-
-          # 循环删除
+          echo "🎯 开始执行删除..."
+          # 3. 循环删除
           for RUN_ID in $RUN_IDS; do
             echo "正在删除 Run ID: $RUN_ID"
-            # 调用 API 删除，如果失败会直接打印 HTTP 错误
-            if gh api -X DELETE "repos/$GH_REPO/actions/runs/$RUN_ID"; then
-              echo "✅ 成功删除 $RUN_ID"
-            else
-              echo "❌ 删除失败 $RUN_ID (请查看上方 HTTP 错误代码)"
-            fi
+            # 如果失败，打印出真实报错
+            gh api -X DELETE "repos/$GH_REPO/actions/runs/$RUN_ID" || echo "❌ 删除失败: $RUN_ID"
           done
           
-          echo "=================================================="
-          echo "🎉 所有清理任务完成！"
+          echo "🎉 清理任务完成！"
