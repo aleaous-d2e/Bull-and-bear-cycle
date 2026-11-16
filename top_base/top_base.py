@@ -152,7 +152,7 @@ def fetch_index_close(date_str):
     与后面的“月K线”毫无关系。
     """
     ymd = date_str.replace("-", "")
-    df = ak.stock_zh_index_daily_tx(symbol="sh000001", start_date=ymd, end_date=ymd)
+    df = ak.index_zh_daily_tx(symbol="sh000001", start_date=ymd, end_date=ymd)
     if df is None or df.empty:
         raise RuntimeError(f"腾讯源未返回 {date_str} 的指数数据")
     close_col = "close" if "close" in df.columns else "收盘"
@@ -226,7 +226,7 @@ def daily_from_tx(symbol: str, start_date: str, end_date: str):
     优点：速度极快，只返回请求的区间，不占用多余内存。
     """
     try:
-        df = ak.stock_zh_index_daily_tx(symbol=symbol, start_date=start_date, end_date=end_date)
+        df = ak.index_zh_daily_tx(symbol=symbol, start_date=start_date, end_date=end_date)
         if df is None or df.empty: return None
         df = df.copy()
         df["date"] = pd.to_datetime(df["date"])
