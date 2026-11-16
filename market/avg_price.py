@@ -52,7 +52,7 @@ def _load_trade_dates():
     """全量日历，进程内只请求一次。"""
     global _TRADE_DATES
     if _TRADE_DATES is None:
-        df = ak.tool_trade_date_hist_sina()
+        df = ak.calendar_trade_date_hist_sina()
         _TRADE_DATES = pd.to_datetime(df["trade_date"]).sort_values().reset_index(drop=True)
     return _TRADE_DATES
 

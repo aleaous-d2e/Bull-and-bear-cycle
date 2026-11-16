@@ -51,7 +51,7 @@ def get_trade_dates():
     """
     global _TRADE_DATES
     if _TRADE_DATES is None:
-        df = ak.tool_trade_date_hist_sina()
+        df = ak.calendar_trade_date_hist_sina()
         _TRADE_DATES = pd.to_datetime(df["trade_date"]).dt.date.tolist()
     return _TRADE_DATES
 

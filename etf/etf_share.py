@@ -85,7 +85,7 @@ REMOVE_BROAD_CATEGORIES = {"宽基"}
 def is_today_trading_day() -> bool:
     """判断今天是否为真实交易日。"""
     today = date.today()
-    df = ak.tool_trade_date_hist_sina()
+    df = ak.calendar_trade_date_hist_sina()
     s = set(pd.to_datetime(df["trade_date"]).dt.date)
     return today in s
 
@@ -108,7 +108,7 @@ def exchange_of(code: str) -> str:
 
 def get_trade_dates(start: date, end: date) -> list[date]:
     """获取 [start, end] 区间内的真实交易日。"""
-    df = ak.tool_trade_date_hist_sina()
+    df = ak.calendar_trade_date_hist_sina()
     col = "trade_date" if "trade_date" in df.columns else df.columns[0]
     s = pd.to_datetime(df[col]).dt.date
     return sorted(d for d in s.unique() if start <= d <= end)
@@ -119,7 +119,7 @@ def last_trade_date() -> date:
     两个交易所的份额数据都是 T+1 才定稿，所以取严格早于今天的最近交易日。
     """
     today = date.today()
-    df = ak.tool_trade_date_hist_sina()
+    df = ak.calendar_trade_date_hist_sina()
     s = pd.to_datetime(df["trade_date"]).dt.date
     past = sorted(d for d in s.unique() if d < today)
     return past[-1] if past else today
