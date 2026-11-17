@@ -191,10 +191,10 @@ def save_market_data(data):
 def run_once():
     # ---------- 最高优先级：判断今天是否交易日 ----------
     # 一旦不是交易日，立即结束脚本，不读写任何文件、不调用后续接口
-    # today_str = datetime.date.today().strftime("%Y-%m-%d")
-    # if not is_trade_date(today_str):
-    #     print(f"[结束] 今天 {today_str} 不是交易日，跳过（不修改任何文件）")
-    #     return
+    today_str = datetime.date.today().strftime("%Y-%m-%d")
+    if not is_trade_date(today_str):
+        print(f"[结束] 今天 {today_str} 不是交易日，跳过（不修改任何文件）")
+        return
 
     # ---------- 定位 T-1 交易日 ----------
     target_date = get_prev_trade_date()
