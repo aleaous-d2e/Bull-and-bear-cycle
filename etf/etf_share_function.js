@@ -9,7 +9,7 @@ window.__ETF_SHARE_DATA__ = {
 /* ================= 分组定义 ================= */
 window.__ETF_GROUPS__ = [
   { "name": "科创板50",         "codes": ["588080","588000"],           "category": "broad" },
-  { "name": "沪深300/上证50",  "codes": ["510300", "510310"], "category": "broad" },
+  { "name": "沪深300",  "codes": ["510300", "510310","159919","510330"], "category": "broad" },
   { "name": "创业板/上证50",           "codes": ["159915", "159952","159949","510050"], "category": "broad" },
   { "name": "中证系列",          "codes": ["510500","512100","563300"],"category": "broad" },
   { "name": "🆕 待观察", "codes": [], "category": "sector" },
