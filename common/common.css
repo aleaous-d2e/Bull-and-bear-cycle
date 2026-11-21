@@ -477,7 +477,8 @@ body.theme-light .text-down { color: #059669 !important; }
   transform: scale(1.1);
 }
 .brand h1, .brand-title {
-  font-size: 24px;
+  font-size: 18px;
+  white-space: nowrap;
   color: var(--text);
   margin: 0;
   letter-spacing: 1px;
@@ -511,4 +512,18 @@ body.theme-light .text-down { color: #059669 !important; }
 /* 页面一加载就自动播放 */
 .brand-logo svg {
   animation: logo-pulse 3s ease-in-out infinite;
+}
+/* ========== 导航当前页高亮（由 nav.js 渲染时打标） ========== */
+.menu-item.current {
+  background: var(--line);
+  font-weight: 600;
+  color: var(--text);
+}
+
+/* ========== 侧栏二级导航（组内小标题） ========== */
+.menu-subtitle {
+  font-size: 11.5px;
+  color: var(--muted);
+  padding: 8px 10px 4px;
+  opacity: .8;
 }

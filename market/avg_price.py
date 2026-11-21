@@ -3,29 +3,36 @@
 A股全市场总市值 + 平均股价 —— 单日模式，写入 market_data.js
 =========================================================
 功能:
-  - 最高优先级：先判断今天是否交易日
-        - 今天不是交易日（周末/节假日）-> 立即结束脚本，不做任何文件读写
-        - 今天是交易日                ->git 取 T-1 交易日数据
+  - 今天是否交易日由总调度（common/central_control.py）统一判断，本脚本不再自己判断：
+        - 不是交易日（周末/节假日）-> 调度根本不会调用本脚本
+        - 是交易日                -> 取当天数据（调度放在 22:00 之后跑，收盘数据已发布）
   - 沪深：api.finance_valuation 拉目标日期总市值（沪 / 深 / 合计）
   - 北交所：只请求一次，提取目标日期总市值（不做全量缓存）
   - 平均股价：api.daily 拉目标日全市场平均收盘价（close > 0 且 vol > 0）
   - 把结果合并进 market_data.js（同日期自动更新）
   - market_data.js 中 ashare 按日期降序排列（最新在前）
-  - 定时任务：每天 08:00 触发，内部判断今天是否交易日，非交易日直接结束
+  - 定时任务：每个交易日 22:00 之后触发 common/central_control.py，交易日判断由调度负责
 =========================================================
+
+公共部分（交易日历、market_data.js 读写、退避重试）已抽到 common 包（common/__init__.py）。
 """
 
 import re
 import os
-import sys
 import json
-import time
+import sys
 import datetime
 import requests
-import pandas as pd
-import akshare as ak
-from zzshare.client import DataApi
 import traceback
+
+from zzshare.client import DataApi
+
+# 直接跑 market/avg_price.py 时，sys.path[0] 只有 market/，项目根不在里面，
+# 于是 import common 找不到项目根下的 common/ 包（IDE 里靠 PYTHONPATH 才碰巧能找到）。
+# 这里显式把项目根插到最前面，不依赖 IDE 配置、也不依赖从哪个目录启动。
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+import common
 
 # ==================== 配置 ====================
 MARKET_DATA_JS = "market_data.js"
@@ -44,36 +51,14 @@ BSE_HEADERS = {
 
 api = DataApi(token=ZZSHARE_TOKEN) if ZZSHARE_TOKEN else DataApi()
 
-# ==================== 交易日历（AkShare 新浪交易日历） ====================
-_TRADE_DATES = None
+# ==================== 交易日历 ====================
+# 日历的加载与缓存全在 common 包（common/__init__.py），与 etf_share.py、top_base.py 共用同一份缓存。
+# 原来这里还有 get_trade_dates / is_trade_date 两个只做转发的空壳，随着交易日判断上移到
+# 调度、以及 T-1 改成当天，都已经没有调用者，删掉；需要时直接调 common.xxx。
 
 
-def _load_trade_dates():
-    """全量日历，进程内只请求一次。"""
-    global _TRADE_DATES
-    if _TRADE_DATES is None:
-        df = ak.calendar_trade_date_hist_sina()
-        _TRADE_DATES = pd.to_datetime(df["trade_date"]).sort_values().reset_index(drop=True)
-    return _TRADE_DATES
-
-
-def get_trade_dates(start_date, end_date):
-    """返回区间内的真实交易日列表"""
-    dates = _load_trade_dates()
-    s, e = pd.Timestamp(start_date), pd.Timestamp(end_date)
-    return dates[(dates >= s) & (dates <= e)].dt.strftime("%Y-%m-%d").tolist()
-
-
-def is_trade_date(date_str):
-    """判断某日是否交易日"""
-    return pd.Timestamp(date_str) in _load_trade_dates().values
-
-
-def get_prev_trade_date():
-    """返回上一个交易日（调用前应已确认今天是交易日）"""
-    dates = _load_trade_dates()
-    today = pd.Timestamp.today().normalize()
-    return dates[dates < today].max().strftime("%Y-%m-%d")
+# 【改动】原来这里有个 get_prev_trade_date()，取严格早于今天的交易日。
+# 现在调度挪到 22:00 之后跑，当天数据已经发布，直接以当天为目标日，这个函数不再需要。
 
 
 # ==================== 北交所：只取目标日期总市值 ====================
@@ -81,57 +66,47 @@ def get_bse_mv(trade_date):
     """北交所目标日期总市值（亿元），只挑出目标日期那一条，不做本地缓存"""
     target_compact = trade_date.replace("-", "")
 
-    for i in range(BSE_RETRY_TIMES):
-        try:
-            r = requests.post(BSE_URL, data={"date": ""}, headers=BSE_HEADERS, timeout=30)
-            m = re.search(r"null\((\[.*\])\)", r.text, re.DOTALL)
-            if not m:
-                raise ValueError("返回格式异常")
+    def _fetch():
+        r = requests.post(BSE_URL, data={"date": ""}, headers=BSE_HEADERS, timeout=30)
+        m = re.search(r"null\((\[.*\])\)", r.text, re.DOTALL)
+        if not m:
+            raise ValueError("返回格式异常")
 
-            for item in json.loads(m.group(1)):
-                if (item.get("xxzrlx") == "2"
-                        and str(item.get("rq", "")) == target_compact
-                        and "zsz" in item):
-                    mv = float(item["zsz"]) / 1e8
-                    print(f"[北交所] {trade_date} 总市值 {mv:.1f} 亿")
-                    return mv
+        for item in json.loads(m.group(1)):
+            if (item.get("xxzrlx") == "2"
+                    and str(item.get("rq", "")) == target_compact
+                    and "zsz" in item):
+                return float(item["zsz"]) / 1e8
+        return None  # 接口通了但目标日期没有数据
 
-            print(f"[北交所] 未找到 {trade_date} 的数据")
-            return None
+    mv = common.with_retry(_fetch, times=BSE_RETRY_TIMES, label="北交所")
 
-        except Exception as e:
-            wait = 2 ** i
-            print(f"[北交所] 第 {i + 1}/{BSE_RETRY_TIMES} 次失败: {e}，{wait}s 后重试")
-            if i < BSE_RETRY_TIMES - 1:
-                time.sleep(wait)
+    if mv is None:
+        print(f"[北交所] 未找到 {trade_date} 的数据")
+        return None
 
-    print("[北交所] 全部重试失败，返回 None")
-    return None
+    print(f"[北交所] {trade_date} 总市值 {mv:.1f} 亿")
+    return mv
 
 
 # ==================== 沪深：单日拉取 + 指数退避 ====================
 def get_ashare_total_mv(date_str, retries=2):
     """带指数退避重试的沪深全市场总市值获取"""
-    for i in range(retries):
-        try:
-            df = api.finance_valuation(date_str.replace("-", ""))
-            if df is None or df.empty:
-                return None, None, None
 
-            code = df["code"].astype(str)
-            sse_mv = float(df.loc[code.str.endswith((".SH", ".KSH")), "market_cap"].sum())
-            szse_mv = float(df.loc[code.str.endswith((".SZ", ".GEM")), "market_cap"].sum())
-            total = float(df["market_cap"].sum())
+    def _fetch():
+        df = api.finance_valuation(date_str.replace("-", ""))
+        if df is None or df.empty:
+            return None
 
-            return total, sse_mv, szse_mv
+        code = df["code"].astype(str)
+        sse_mv = float(df.loc[code.str.endswith((".SH", ".KSH")), "market_cap"].sum())
+        szse_mv = float(df.loc[code.str.endswith((".SZ", ".GEM")), "market_cap"].sum())
+        total = float(df["market_cap"].sum())
 
-        except Exception as e:
-            wait = 2 ** i
-            print(f"  [zzshare {date_str}] 第 {i + 1}/{retries} 次失败: {e}，{wait}s 后重试")
-            if i < retries - 1:
-                time.sleep(wait)
+        return total, sse_mv, szse_mv
 
-    return None, None, None
+    result = common.with_retry(_fetch, times=retries, label=f"zzshare {date_str}")
+    return result if result else (None, None, None)
 
 
 # ==================== 平均股价：单日平均收盘价 ====================
@@ -156,20 +131,13 @@ def get_avg_close(trade_date):
 
 
 # ==================== market_data.js 读写 ====================
+# 解析与落盘（含 .tmp + os.replace 的原子写）统一在 common 包，这里只保留业务约定：
+# 缺文件时的空结构、ashare 按日期降序。
 def load_market_data():
-    if not os.path.exists(MARKET_DATA_JS):
-        return {"ashare": {}, "meta": {},
-                "annual": [], "gdp_annual": {}}
-
-    with open(MARKET_DATA_JS, "r", encoding="utf-8") as f:
-        content = f.read()
-
-    start = content.find("{")
-    end = content.rfind("}")
-    if start < 0 or end < 0:
-        raise ValueError("无法定位 market_data.js 中的 JSON")
-
-    return json.loads(content[start:end + 1])
+    return common.read_js_json(
+        MARKET_DATA_JS,
+        default={"ashare": {}, "meta": {}, "annual": [], "gdp_annual": {}},
+    )
 
 
 def save_market_data(data):
@@ -178,38 +146,30 @@ def save_market_data(data):
         data["ashare"] = dict(sorted(data["ashare"].items(),
                                      key=lambda kv: kv[0], reverse=True))
 
-    out = "window.MARKET_DATA = " + json.dumps(
-        data, ensure_ascii=False, separators=(",", ":")) + ";"
-
-    tmp = MARKET_DATA_JS + ".tmp"
-    with open(tmp, "w", encoding="utf-8") as f:
-        f.write(out)
-    os.replace(tmp, MARKET_DATA_JS)
+    common.write_js_json(MARKET_DATA_JS, "MARKET_DATA", data, newline=False)
 
 
 # ==================== 单日任务 ====================
 def run_once():
-    # ---------- 最高优先级：判断今天是否交易日 ----------
-    # 一旦不是交易日，立即结束脚本，不读写任何文件、不调用后续接口
-    today_str = datetime.date.today().strftime("%Y-%m-%d")
-    if not is_trade_date(today_str):
-        print(f"[结束] 今天 {today_str} 不是交易日，跳过（不修改任何文件）")
-        return
+    # ---------- 交易日判断已上移到总调度（common/central_control.py） ----------
+    # 原来这里先判断今天是否交易日、不是就直接 return；现在由调度统一判，
+    # 只有交易日才会调用本脚本，这里不再重复请求交易日历。
+    # 单独手动跑也不会误写：非交易日跑只是把最近那个交易日重抓一遍，结果幂等。
 
-    # ---------- 定位 T-1 交易日 ----------
-    target_date = get_prev_trade_date()
-    if target_date is None:
-        raise ValueError("[错误] 无法确定上一个交易日，终止执行")
+    # ---------- 目标日 = 当天 ----------
+    # 22:00 之后当天收盘的总市值、均价都已发布，不再往前取 T-1。
+    today_str = datetime.date.today().strftime("%Y-%m-%d")
+    target_date = today_str
 
     print(f"\n{'=' * 60}")
-    print(f"目标交易日 (T-1): {target_date}")
+    print(f"目标交易日: {target_date}")
     print(f"{'=' * 60}")
 
     # ---------- 读取现有数据并计算需要补齐的真实交易日 ----------
     data = load_market_data()
     existing_dates = list(data.get("ashare", {}))
 
-    # 无论是否补缺，T-1当天必须是最新的
+    # 无论是否补缺，当天必须是最新的
     dates_to_fetch = {target_date}
 
     # 【修复逻辑】只要库中发现 is_mock=True 的模拟数据，就加入重跑队列强制重试

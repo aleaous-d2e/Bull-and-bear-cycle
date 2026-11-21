@@ -1,132 +1,65 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>数据看板中心</title>
-  <link rel="stylesheet" href="./common/common.css">
-  <style>
-    /* ========== 导航首页专属布局 ========== */
-    .nav-container {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      min-height: 100vh;
-      padding: 20px;
-    }
-    .nav-header {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      width: 100%;
-      max-width: 800px;
-      margin-bottom: 40px;
-    }
-    .nav-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-      gap: 20px;
-      width: 100%;
-      max-width: 800px;
-    }
-    .nav-card {
-      background: var(--panel);
-      border: 1px solid var(--line);
-      border-radius: 14px;
-      padding: 24px;
-      text-decoration: none;
-      color: var(--text);
-      transition: transform 0.2s, box-shadow 0.2s, border-color 0.2s;
-      display: flex;
-      flex-direction: column;
-      box-shadow: 0 4px 12px rgba(0,0,0,0.05);
-      position: relative;
-      overflow: hidden;
-    }
-    /* 卡片顶部渐变线条 */
-    .nav-card::before {
-      content: '';
-      position: absolute;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 3px;
-      background: linear-gradient(90deg, var(--accent) 0%, transparent 100%);
-      opacity: 0;
-      transition: opacity 0.3s;
-    }
-    .nav-card:hover {
-      transform: translateY(-4px);
-      box-shadow: 0 12px 28px rgba(0,0,0,0.15);
-      border-color: var(--accent);
-    }
-    .nav-card:hover::before {
-      opacity: 1;
-    }
-    .nav-card h2 {
-      margin: 0 0 10px 0;
-      font-size: 18px;
-      color: var(--accent);
-    }
-    .nav-card p {
-      margin: 0;
-      font-size: 13.5px;
-      color: var(--muted);
-      line-height: 1.6;
-    }
-  </style>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>数据中心</title>
+<link rel="stylesheet" href="./common/common.css">
+<style>
+  .home { width: 100%; max-width: 1080px; margin: 0 auto; padding: 8px 0 40px; }
+  .home h1 { font-size: 26px; margin: 8px 0 6px; letter-spacing: .5px; }
+  .home .lead { color: var(--muted); font-size: 13px; line-height: 1.8; margin-bottom: 26px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 14px; }
+  .entry { text-decoration: none; display: block; transition: transform .18s ease, border-color .18s ease; }
+  .entry:hover { transform: translateY(-2px); border-color: var(--accent); }
+  .entry h3 { font-size: 15px; color: var(--text); margin: 0 0 8px; }
+  .entry p { font-size: 12.5px; color: var(--muted); line-height: 1.7; margin: 0; }
+  .tag { display: inline-block; font-size: 11px; padding: 2px 8px; border-radius: 999px;
+         color: var(--accent); background: var(--accent-soft); margin-bottom: 10px; }
+</style>
 </head>
 <body class="theme-dark">
+<div class="app-layout">
+  <main class="main-content">
+    <div class="home">
+      <h1>数据中心</h1>
+      <p class="lead">A 股资金结构与顶底部研究。每个页面独立，侧栏导航由 <code>common/build_nav.py</code> 扫描目录自动生成。</p>
 
-  <div class="nav-container">
-    <div class="nav-header">
-
-      <!-- 引用 common.css 中的通用品牌样式 -->
-      <div class="brand">
-        <div class="brand-logo">
-          <svg viewBox="0 0 24 24">
-  <!-- 外围刻度圈 -->
-  <circle cx="12" cy="12" r="10" stroke-width="1" opacity="0.2" stroke-dasharray="2 4"/>
-  <!-- 十字准星 -->
-  <path d="M12 2v20M2 12h20" stroke-width="1" opacity="0.3"/>
-  <!-- 雷达扫描扇形区 -->
-  <path d="M12 12 L12 2 A10 10 0 0 1 21.2 16.9 Z" fill="var(--accent)" fill-opacity="0.15" stroke="none"/>
-  <!-- 核心数据点 -->
-  <circle cx="12" cy="12" r="2.5" fill="var(--accent)" stroke="none"/>
-  <circle cx="17.5" cy="8.5" r="1.5" fill="var(--accent)" stroke="none"/>
-  <circle cx="7" cy="15.5" r="1" fill="var(--accent)" stroke="none"/>
-</svg>
-        </div>
-        <h1>数据中心</h1>
+      <div class="grid">
+        <a class="entry chart-card" href="./top_base/两融看板.html">
+          <span class="tag">顶底部研究</span>
+          <h3>两融出清信号</h3>
+          <p>两融余额创 250 日新低、平均股价不再新低 —— 杠杆端的出清观测。</p>
+        </a>
+        <a class="entry chart-card" href="./top_base/top_base.html">
+          <span class="tag">顶底部研究</span>
+          <h3>市场顶底部研究</h3>
+          <p>指数通道、破净比例与历史大底的位置校准。</p>
+        </a>
+        <a class="entry chart-card" href="./market/avg_price.html">
+          <span class="tag">市场估值</span>
+          <h3>牛熊指标</h3>
+          <p>市值/GDP 与平均股价的分位对照，判断估值所处区间。</p>
+        </a>
+        <a class="entry chart-card" href="./market/wave_interpretate.html">
+          <span class="tag">市场估值</span>
+          <h3>平均股价推演</h3>
+          <p>月线全量数据与双轨斜率的 A-B-C 推演。</p>
+        </a>
+        <a class="entry chart-card" href="./etf/etf_share.html">
+          <span class="tag">资金结构</span>
+          <h3>ETF 份额变动</h3>
+          <p>宽基与行业 ETF 的份额增减，看钱往哪边流。</p>
+        </a>
+        <a class="entry chart-card" href="./etf/etf_gjd_report.html">
+          <span class="tag">资金结构</span>
+          <h3>国家队行为框架</h3>
+          <p>2008–2026 国家队持仓与市场周期的对应关系。</p>
+        </a>
       </div>
-
-      <!-- 引用 common.css 中的通用按钮样式 -->
-      <button id="themeToggle" class="theme-btn">切换主题</button>
     </div>
-
-    <div class="nav-grid">
-      <a href="./etf/etf_share.html" class="nav-card">
-        <h2>ETF 份额监测</h2>
-        <p>宽基与行业 ETF 份额走势、增减仓排行及拆分合并事件追踪。</p>
-      </a>
-
-      <a href="./market/avg_price.html" class="nav-card">
-        <h2>牛熊指标</h2>
-        <p>A股总市值 / GDP 估值分析、平均股价走势及牛熊趋势支撑线。</p>
-      </a>
-
-      <a href="./etf/etf_gjd_report.html" class="nav-card">
-        <h2>国家队动向分析</h2>
-        <p>上证指数历史大底与国家队增持节点复盘及测算。</p>
-      </a>
-      <a href="top_base/top_base.html" class="nav-card">
-        <h2>A股破净数</h2>
-        <p>上证指数历史大底与破净比例关系。</p>
-      </a>
-    </div>
-  </div>
-
-  <script src="./common/common.js"></script>
+  </main>
+</div>
+<script src="./common/common.js"></script>
 </body>
 </html>

@@ -10,31 +10,14 @@
 <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
 <script src="market_data.js"></script>
 
+<!-- 导航：一级 nav-group / 子分组 nav-sub / 菜单项 nav-title / 排序 nav-order（可删任意一行） -->
+<meta name="nav-group" content="顶底部研究">
+<meta name="nav-sub" content="市场估值">
+<meta name="nav-title" content="牛熊指标">
+<meta name="nav-order" content="1">
 </head>
 <body class="theme-dark"> <!-- 默认加一个，JS会立刻覆盖 -->
-  <div class="sidebar-overlay" id="sidebarOverlay"></div>
   <div class="app-layout">
-    <!-- 侧边栏 -->
-    <aside class="sidebar" id="sidebar">
-      <div class="sidebar-header">
-        <div class="logo">数据中心</div>
-        <!-- 把切换按钮和折叠按钮放在同一个容器里 -->
-        <div class="header-actions">
-          <button class="theme-toggle-btn" id="themeToggle" title="切换深浅色">🌙</button>
-          <button class="sidebar-toggle" id="sidebarToggle">☰</button>
-        </div>
-      </div>
-
-      <div class="sidebar-menu">
-        <div class="menu-group">
-          <a href="../top_base/top_base.html" class="menu-item">顶底部研究</a>
-          <a href="avg_price.html" class="menu-item">牛熊指标</a>
-          <a href="../etf/etf_share.html" class="menu-item">ETF 份额变动</a>
-          <a href="../etf/etf_gjd_report.html" class="menu-item">国家队行为框架</a>
-        </div>
-      </div>
-      <!-- 底部不再需要放置按钮了 -->
-    </aside>
 
     <main class="main-content">
       <div class="wrap">

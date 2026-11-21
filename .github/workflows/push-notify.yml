@@ -75,8 +75,7 @@ jobs:
         run: |
           CURRENT_TIME=$(TZ='Asia/Shanghai' date '+%Y-%m-%d %H:%M:%S')
           TIMESTAMP=$(date +%s)
-          DAY=$(TZ='Asia/Shanghai' date '+%d')
-          
+
           # 1. 判断标题
           if [ "$EVENT_NAME" == "push" ]; then
             TITLE="✅ **代码推送成功**"
@@ -89,13 +88,9 @@ jobs:
           # 2. 拼接消息内容
           MSG_CONTENT="$TITLE"$'\n'
           MSG_CONTENT+="> **时间**：${CURRENT_TIME}"$'\n'
-          
-          if [ "10$DAY" -eq 1]; then
-            MSG_CONTENT+="> 📈 **提示**：触发月初综合月度任务"$'\n'
-          fi
-          
+
           MSG_CONTENT+=$'\n'"👉 [点击查看最新数据](${SITE_URL}?v=${TIMESTAMP})"
-          
+
           # 如果是定时任务且执行失败，追加日志排查链接
           if [ "$EVENT_NAME" != "push" ] && [ "$IS_SUCCESS" != "true" ]; then
             MSG_CONTENT+=$'\n\n'"⚠️ [点击查看 Actions 日志排查失败原因](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})"

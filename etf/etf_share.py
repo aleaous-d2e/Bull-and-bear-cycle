@@ -19,14 +19,24 @@ ETF 份额数据流水线
 代码来源：宽基内置 + 阶段 1 审查筛出的行业主题。
 meta 格式：{ "159516": {"name": "半导体设备ETF国泰"}, ... }
           宽基名称请在 etf_share_data_broad.js 中手动维护，脚本读取旧文件时原样保留。
+
+交易日历、JS 读写等公共部分见 common 包（common/__init__.py）。
 """
 import akshare as ak
 import pandas as pd
 import requests
 import json
 import os
+import sys
 import time
 from datetime import date, timedelta
+
+# 直接跑 etf/etf_share.py 时，sys.path[0] 只有 etf/，项目根不在里面，
+# 于是 import common 找不到项目根下的 common/ 包（IDE 里靠 PYTHONPATH 才碰巧能找到）。
+# 这里显式把项目根插到最前面，不依赖 IDE 配置、也不依赖从哪个目录启动。
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+import common
 
 # ============================================================
 # 配置
@@ -84,13 +94,12 @@ REMOVE_BROAD_CATEGORIES = {"宽基"}
 # ============================================================
 # 通用工具
 # ============================================================
+# 原来本文件里的 is_today_trading_day / get_trade_dates / last_trade_date 每次调用都要
+# 重新请求一遍 AkShare 日历（一次运行要打好几遍），现在统一走 common 包的进程内缓存。
 
-def is_today_trading_day() -> bool:
-    """判断今天是否为真实交易日。"""
-    today = date.today()
-    df = ak.calendar_trade_date_hist_sina()
-    s = set(pd.to_datetime(df["trade_date"]).dt.date)
-    return today in s
+
+# 交易日判断已上移到调度；原来的 is_today_trading_day() 空壳一并删掉，需要时直接 common.is_trading_day()
+
 
 def normalize_code(v) -> str | None:
     """把输入统一成 6 位数字代码，无效返回 None。"""
@@ -109,33 +118,16 @@ def exchange_of(code: str) -> str:
     raise ValueError(f"无法根据代码 {code} 判断交易所，请检查输入。")
 
 
-def get_trade_dates(start: date, end: date) -> list[date]:
-    """获取 [start, end] 区间内的真实交易日。"""
-    df = ak.calendar_trade_date_hist_sina()
-    col = "trade_date" if "trade_date" in df.columns else df.columns[0]
-    s = pd.to_datetime(df[col]).dt.date
-    return sorted(d for d in s.unique() if start <= d <= end)
-
-
-def last_trade_date() -> date:
-    """最近一个份额数据已定稿的交易日（T-1 语义）。
-    两个交易所的份额数据都是 T+1 才定稿，所以取严格早于今天的最近交易日。
-    """
-    today = date.today()
-    df = ak.calendar_trade_date_hist_sina()
-    s = pd.to_datetime(df["trade_date"]).dt.date
-    past = sorted(d for d in s.unique() if d < today)
-    return past[-1] if past else today
-
-
 def is_review_day() -> bool:
-    """判断今天是否应该跑ETF池审查：本月 2 号或之后第一个交易日。"""
-    today = date.today()
-    if today.day < 2:
-        return False
-    trade_days = get_trade_dates(today.replace(day=1), today)
-    candidates = [d for d in trade_days if d.day >= 2]
-    return bool(candidates) and candidates[0] == today
+    """今天是否应该跑ETF池审查。
+
+    结论由调度（common/central_control.py）通过 AMC_REVIEW 下发：本月 2 号及以后首个交易日，
+    或节假日前最后一个交易日。手动单跑（没有这个变量）时才退回自己判断。
+    """
+    flag = os.environ.get("AMC_REVIEW")
+    if flag is not None:
+        return flag == "1"
+    return common.is_first_trading_day_of_month(day_from=2)
 
 
 # ============================================================
@@ -462,13 +454,7 @@ def load_existing_js(path: str) -> dict:
         print(f"未发现已有文件 {path}，将全量抓取。")
         return {}
     try:
-        with open(path, "r", encoding="utf-8") as f:
-            text = f.read()
-        start_idx = text.find("{")
-        end_idx = text.rfind("}")
-        if start_idx == -1 or end_idx == -1:
-            raise ValueError("未找到 JSON 主体")
-        data = json.loads(text[start_idx:end_idx + 1])
+        data = common.read_js_json(path, default={})
         print(f"已读取已有文件 {path}，包含 {len(data.get('series', {}))} 只基金。")
         return data
     except Exception as e:
@@ -526,9 +512,6 @@ def fetch_sse_batch(code_dates: dict[str, set[str]]) -> dict[str, list[dict]]:
                     })
         time.sleep(SLEEP_PER_REQUEST)
     return results
-
-
-import requests  # 确保文件顶部有导入 requests
 
 
 def fetch_szse_batch(code_dates: dict[str, set[str]]) -> dict[str, list[dict]]:
@@ -599,11 +582,10 @@ def fetch_szse_batch(code_dates: dict[str, set[str]]) -> dict[str, list[dict]]:
 
     return results
 
+
 def save_js(path: str, var_name: str, payload: dict):
     """把 payload 写为 window.<var_name> = {...}; 形式。"""
-    content = f"window.{var_name} = " + json.dumps(payload, ensure_ascii=False, indent=2) + ";\n"
-    with open(path, "w", encoding="utf-8") as f:
-        f.write(content)
+    common.write_js_json(path, var_name, payload, indent=2)
     print(f"已写入 {path}")
 
 
@@ -640,8 +622,8 @@ def run_update(snapshot_date: date, sector_map: dict[str, str] | None = None):
     print(f"待观察 ETF：{WATCH_CODES or '（无）'}")
 
     # 获取两套交易日历（宽基 6 年，行业主题 3 年）
-    broad_trade_dates = get_trade_dates(BROAD_START_DATE, END_DATE)
-    sector_trade_dates = get_trade_dates(SECTOR_START_DATE, END_DATE)
+    broad_trade_dates = common.get_trade_dates(BROAD_START_DATE, END_DATE)
+    sector_trade_dates = common.get_trade_dates(SECTOR_START_DATE, END_DATE)
     print(f"宽基交易日历：{BROAD_START_DATE} ~ {END_DATE} 共 {len(broad_trade_dates)} 个真实交易日。")
     print(f"行业主题交易日历：{SECTOR_START_DATE} ~ {END_DATE} 共 {len(sector_trade_dates)} 个真实交易日。")
 
@@ -740,11 +722,12 @@ def run_update(snapshot_date: date, sector_map: dict[str, str] | None = None):
 # ============================================================
 def main():
 
-    if not is_today_trading_day():
-        print(f"{date.today()} 非交易日，跳过。")
-        return
-    # 两个交易所的份额数据都是 T+1 定稿，统一取最近一个已定稿交易日
-    snapshot_date = last_trade_date()
+    # 交易日判断已上移到 common/central_control.py：非交易日不会调用本脚本
+    # 两个交易所的份额数据都是 T+1 定稿，统一取最近一个已定稿交易日。
+    # 调度从 08:00 挪到 22:00 也不改变这一点：当天份额当晚还没出来，
+    # 所以这里仍取 T-1（其余脚本的数据 22:00 后已发布，取当天即可）。
+    # common.last_trade_date() 的语义就是“严格早于今天的最近一个交易日”，正好是 T-1。
+    snapshot_date = common.last_trade_date()
     print(f"快照日（T-1）：{snapshot_date}")
 
     # 池审查：每月 2 号（非交易日顺延至下一交易日）

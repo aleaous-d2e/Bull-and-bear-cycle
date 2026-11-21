@@ -6,6 +6,20 @@
 (function () {
   'use strict';
 
+  /* ===== 导航数据 =====
+     由 common/build_nav.py 扫描项目内所有 html 自动生成，勿手改。
+     字段：path 相对项目根 / title 二级导航文案 / group 一级导航 / sub 子分组 / order 排序 */
+  /* NAV:BEGIN */
+  const NAV_PAGES = [
+    {"path":"etf/etf_share.html","title":"ETF 份额变动","group":"顶底部研究","sub":"","order":1},
+    {"path":"etf/etf_gjd_report.html","title":"国家队行为框架","group":"研究报告","sub":"","order":2},
+    {"path":"top_base/two_melt.html","title":"两融出清信号","group":"顶底部研究","sub":"","order":1},
+    {"path":"top_base/top_base.html","title":"市场顶底部研究","group":"顶底部研究","sub":"","order":2},
+    {"path":"market/avg_price.html","title":"牛熊指标","group":"市场估值","sub":"","order":1},
+    {"path":"market/wave_interpretate.html","title":"平均股价推演","group":"未来演绎","sub":"","order":2}
+  ];
+  /* NAV:END */
+
   /* ================= 1. 主题控制逻辑 ================= */
 
   // 更新主题切换按钮的文案和图标
@@ -49,6 +63,92 @@
     applyTheme(newTheme);
   };
 
+
+
+  /* ================= 1.5 侧边栏导航自动渲染 ================= */
+  /* 页面只写：<nav class="sidebar-menu" data-nav></nav>
+     导航项来自 nav.js（common/build_nav.py 扫描项目内所有 html 生成）。
+     链接用「站点根 + path」的绝对地址，根由本脚本的 src 反推，
+     因此不管页面在第几层目录都不会拼错路径。 */
+
+  const siteRoot = () => {
+    const tail = '/common/common.js';
+    const tag = Array.from(document.scripts)
+      .find(sc => (sc.getAttribute('src') || '').indexOf('common/common.js') >= 0);
+    if (tag) {
+      const u = new URL(tag.src, location.href);
+      if (u.pathname.endsWith(tail)) {
+        return u.origin + u.pathname.slice(0, u.pathname.length - tail.length + 1);
+      }
+    }
+    return location.origin + '/';
+  };
+
+  /* 页面不必手写 <aside>；只写
+       <div class="app-layout"><main class="main-content">…</main></div>
+     侧栏骨架（品牌 + 主题/收起按钮 + 导航容器）在这里自动补齐。 */
+  const mountSidebar = () => {
+    if (document.querySelector('.sidebar')) return;   // 页面自己写了，就尊重它
+    const layout = document.querySelector('.app-layout');
+    if (!layout) return;
+
+    if (!document.getElementById('sidebarOverlay')) {
+      const ov = document.createElement('div');
+      ov.className = 'sidebar-overlay';
+      ov.id = 'sidebarOverlay';
+      document.body.insertBefore(ov, document.body.firstChild);
+    }
+
+    const aside = document.createElement('aside');
+    aside.className = 'sidebar';
+    aside.id = 'sidebar';
+    aside.innerHTML = '<div class="sidebar-header">'
+      + '<a class="brand" href="' + siteRoot() + '">'
+      + '<span class="brand-logo"><svg viewBox="0 0 24 24"><path d="M4 18 L9 11 L13 14 L20 5"/><path d="M15 5 H20 V10"/></svg></span>'
+      + '<span class="brand-title">数据中心</span></a>'
+      + '<div class="header-actions">'
+      + '<button class="theme-toggle-btn" id="themeToggle" title="切换深浅色">🌙</button>'
+      + '<button class="sidebar-toggle" id="sidebarToggle" title="收起侧边栏">☰</button>'
+      + '</div></div>'
+      + '<nav class="sidebar-menu" data-nav></nav>';
+    layout.insertBefore(aside, layout.firstChild);
+
+    // 骨架来得比 initTheme 晚，这里补一次图标
+    updateThemeBtn(document.body.classList.contains('theme-light') ? 'light' : 'dark');
+  };
+
+  const renderNav = () => {
+    const holder = document.querySelector('[data-nav]') || document.querySelector('.sidebar-menu');
+    if (!holder) return;
+    if (!NAV_PAGES.length) { holder.style.display = 'none'; return; }
+
+    const root = siteRoot();
+    const self = (document.body.dataset.page || '').toLowerCase();
+    const path = decodeURIComponent(location.pathname).toLowerCase();
+    const isOn = p => self
+      ? p.path.toLowerCase() === self
+      : path.endsWith('/' + p.path.toLowerCase());
+
+    /* 一级 group -> 二级 sub -> 页面 */
+    const groups = new Map();
+    for (const p of NAV_PAGES) {
+      if (!groups.has(p.group)) groups.set(p.group, new Map());
+      const subs = groups.get(p.group);
+      const sub = p.sub || '';
+      if (!subs.has(sub)) subs.set(sub, []);
+      subs.get(sub).push(p);
+    }
+
+    holder.innerHTML = Array.from(groups.entries()).map(([group, subs]) => `
+      <div class="menu-group">
+        <div class="menu-title">${group}</div>
+        ${Array.from(subs.entries()).map(([sub, items]) => `
+          ${sub ? `<div class="menu-subtitle">${sub}</div>` : ''}
+          ${items.map(p => `<a class="menu-item${isOn(p) ? ' current' : ''}"
+              href="${root}${encodeURI(p.path)}"${isOn(p) ? ' aria-current="page"' : ''}>${p.title}</a>`).join('')}
+        `).join('')}
+      </div>`).join('');
+  };
 
   /* ================= 2. 侧边栏逻辑 ================= */
 
@@ -134,12 +234,14 @@
   }
 
   document.addEventListener('DOMContentLoaded', () => {
+    mountSidebar();
+    renderNav();
     const themeBtn = document.getElementById('themeToggle');
     if (themeBtn) {
       themeBtn.addEventListener('click', toggleTheme);
     }
     initSidebar();
-    highlightMenu();
+    if (!document.querySelector('.menu-item.current')) highlightMenu();
   });
 
 })();
@@ -221,6 +323,15 @@ window.shiftMonths = (dateStr, months) => {
   d.setDate(Math.min(day, new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate()));
   return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
 };
+
+// 月份字符串 'YYYY-MM' → 月序号（0 起）；趋势推演、月度 K 线都靠它算月差
+window.ymToIndex = (ym) => {
+  const p = String(ym).split('-');
+  return parseInt(p[0], 10) * 12 + parseInt(p[1], 10) - 1;
+};
+
+// 月序号 → 月份字符串 'YYYY-MM'（与 ymToIndex 互逆）
+window.indexToYM = (i) => Math.floor(i / 12) + '-' + String(i % 12 + 1).padStart(2, '0');
 
 // Lightweight Charts 时间 → 'YYYY-MM-DD'
 window.toTimeStr = (t) => {

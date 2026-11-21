@@ -9,6 +9,9 @@ top_base.py —— 整合破净数据与五大指数月K线更新（统一写入
 
 运行：python top_base.py
 前置：pip install akshare pandas
+
+交易日历、JS 解析等公共部分见 common 包（common/__init__.py）；本脚本特有的“头部读取 + 字符头插”
+和“正则替换 INDEX_DATA 以保住几十 MB 的 RAW_DATA”仍留在本文件。
 """
 
 import json
@@ -19,6 +22,13 @@ from datetime import date, timedelta
 
 import akshare as ak
 import pandas as pd
+
+# 直接跑 top_base/top_base.py 时，sys.path[0] 只有 top_base/，项目根不在里面，
+# 于是 import common 找不到项目根下的 common/ 包（IDE 里靠 PYTHONPATH 才碰巧能找到）。
+# 这里显式把项目根插到最前面，不依赖 IDE 配置、也不依赖从哪个目录启动。
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+import common
 
 # ============================================================
 # 全局常量配置
@@ -42,25 +52,12 @@ DEFAULT_START_DATE = "20050101"  # 指数首次全量拉取时的起点
 # ============================================================
 # 通用工具函数（供两个模块共同调用）
 # ============================================================
-_TRADE_DATES = None
+# 日历的缓存（原来这里是本文件自己的 _TRADE_DATES 全局）已下沉到 common 包，
+# 与 avg_price.py、etf_share.py 共用同一份缓存。
 
 
-def get_trade_dates():
-    """
-    【通用】获取历史所有交易日（带进程内缓存，只请求一次 API）。
-    """
-    global _TRADE_DATES
-    if _TRADE_DATES is None:
-        df = ak.calendar_trade_date_hist_sina()
-        _TRADE_DATES = pd.to_datetime(df["trade_date"]).dt.date.tolist()
-    return _TRADE_DATES
-
-
-def is_trading_day(d: date) -> bool:
-    """
-    【通用】判断今天是不是真实的交易日（周末、法定节假日返回 False）。
-    """
-    return d in get_trade_dates()
+# 原来这里还有 get_trade_dates()（转发 common.get_trade_dates_all）和 is_trading_day()，
+# 一个没人调用、一个随“非交易日闸门上移到调度”失去调用者，已删除；需要时直接调 common.xxx。
 
 
 def is_first_trading_day_of_month() -> bool:
@@ -68,27 +65,19 @@ def is_first_trading_day_of_month() -> bool:
     【通用】判断今天是不是本月的第一个交易日。
     用于触发模块 2（指数月K线更新）。
     """
-    today = date.today()
-    dates = get_trade_dates()
-    month_dates = [d for d in dates if d.year == today.year and d.month == today.month]
-    return bool(month_dates) and month_dates[0] == today
+    return common.is_first_trading_day_of_month(day_from=1)
 
 
 def load_existing_index_data() -> dict:
     """
     【通用】从现存的 js 文件中提取并解析 window.INDEX_DATA。
     用于模块 2 的增量判断，如果文件不存在或解析失败返回空字典。
-    """
-    if not os.path.exists(DATA_FILE):
-        return {}
-    with open(DATA_FILE, "r", encoding="utf-8") as f:
-        text = f.read()
 
-    match = re.search(r'window\.INDEX_DATA\s*=\s*(\{.*?\});', text, flags=re.DOTALL)
-    if not match:
-        return {}
+    注意：DATA_FILE 里 RAW_DATA 在前、INDEX_DATA 在后，所以必须按变量名定位，
+    不能用“第一个 { 到最后一个 }”（那样会把 RAW_DATA 也吞进来）。
+    """
     try:
-        return json.loads(match.group(1))
+        return common.read_js_json(DATA_FILE, var_name="INDEX_DATA", default={}) or {}
     except Exception:
         return {}
 
@@ -349,7 +338,8 @@ def update_monthly_data():
         return
 
     # 保存：利用正则精准替换 INDEX_DATA，保留前面几十 MB 的 RAW_DATA
-    js_content = "window.INDEX_DATA = " + json.dumps(existing_data, ensure_ascii=False, indent=2) + ";"
+    # （这正是不能直接用整文件重写的原因，序列化方式统一用 common.dump_js）
+    js_content = common.dump_js("INDEX_DATA", existing_data, indent=2)
 
     with open(DATA_FILE, "r", encoding="utf-8") as f:
         text = f.read()
@@ -370,16 +360,14 @@ def update_monthly_data():
 def main():
     """
     【总调度中心】
-    1. 非交易日直接下班。
+    1. 交易日判断由 common/central_control.py 负责：非交易日它不会调用本脚本。
     2. 每天执行：更新破净数据（模块 1）。
-    3. 每月首个交易日：执行更新指数月线（模块 2）。
+    3. 月度任务（更新指数月线，模块 2）由调度下发的 AMC_MONTHLY 决定：
+       本月首个交易日，或节假日前最后一个交易日。
     """
     today = date.today()
 
-    # 全局闸门：非交易日跳过
-    if not is_trading_day(today):
-        print(f"[{today}] 非交易日，跳过所有任务。")
-        return
+    # 全局闸门（非交易日跳过）已上移到 common/central_control.py，这里不再重复判断
 
     # 每日必修课：更新破净数据
     try:
@@ -387,14 +375,18 @@ def main():
     except Exception as e:
         print(f"❌ 每日破净数据更新失败: {e}")
 
-    # 每月月初大考：更新指数月K线
-    if is_first_trading_day_of_month():
+    # 每月月初大考：更新指数月K线。
+    # 调度传了 AMC_MONTHLY 就按调度的结论；没传（手动单独跑本脚本）才自己判一次，
+    # 否则单跑时月度任务永远不会触发。
+    flag = os.environ.get("AMC_MONTHLY")
+    monthly = is_first_trading_day_of_month() if flag is None else (flag == "1")
+    if monthly:
         try:
             update_monthly_data()
         except Exception as e:
             print(f"❌ 月度指数数据更新失败: {e}")
     else:
-        print("\n今天不是本月首个交易日，跳过月K线更新。")
+        print(f"\n[{today}] 非月度更新日（由调度判断），跳过月K线更新。")
 
 
 if __name__ == "__main__":
