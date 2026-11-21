@@ -2,7 +2,8 @@
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="icon" type="image/svg+xml" href="../common/favicon.svg">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>平均股价月线走势 · 全量数据与 ABC 推演</title>
   <link rel="stylesheet" href="../common/common.css">
   <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
@@ -13,10 +14,10 @@
   </script>
   <style>
     /* ---- 页面专属样式（其余全部来自 common.css） ---- */
-    .page-wrap { width: 100%; max-width: 1200px; margin: 0 auto; }
+    .page-wrap { width: 100%; max-width: var(--content-max, 1200px); margin: 0 auto; }
     .card-block { margin-top: 16px; }
 
-    #chart-price { height: 540px; width: 100%; }
+    #chart-price { height: 440px; width: 100%; }
 
     .mock-notice {
       display: none; margin-top: 12px; padding: 10px 14px; border-radius: 8px;
@@ -45,21 +46,27 @@
     .formula-content .highlight { color: var(--text); font-weight: 700; text-decoration: underline; }
 
     @media (max-width: 768px) {
-      #chart-price { height: 400px; }
+      #chart-price { height: 300px; }
       .formula-content { font-size: 12.5px; }
     }
   </style>
 <!-- 导航：一级 nav-group / 子分组 nav-sub / 菜单项 nav-title / 排序 nav-order（可删任意一行） -->
-<meta name="nav-group" content="顶底部研究">
-<meta name="nav-sub" content="市场估值">
+<meta name="nav-group" content="市场估值">
 <meta name="nav-title" content="平均股价推演">
 <meta name="nav-order" content="2">
 </head>
-<body>
+<body class="theme-dark">
   <!-- common.css 通过 .app-layout.collapsed 提供全屏容器 + 隐藏左侧色块 -->
   <div class="app-layout">
     <div class="main-content">
       <div class="page-wrap">
+
+        <header>
+          <div>
+            <h1>平均股价推演</h1>
+            <p>月线全量数据与双轨斜率的 A-B-C 推演</p>
+          </div>
+        </header>
 
         <!-- 图表卡片：完全复用 .chart-card / .chart-header / .chart-legend -->
         <div class="chart-card">

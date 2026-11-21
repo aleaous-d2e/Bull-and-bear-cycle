@@ -193,14 +193,10 @@
              + `大盘指数：${r[2]}`;
       }),
 
-      legend: {
-        top: 8,
-        right: 24,
-        textStyle: { color: t.text },
-        data: ['破净比例', '大盘指数']
-      },
+      // 图例已由 HTML 的 .chart-legend 提供，这里关闭 ECharts 自带图例，避免重复
+      legend: { show: false },
 
-      grid: { left: 64, right: 72, top: 80, bottom: 92 },
+      grid: { left: 64, right: 72, top: 56, bottom: 92 },
 
       xAxis: {
         type: 'category',
@@ -464,10 +460,11 @@ const INDEX_TRENDS = {
     const pct = (latestMixValue - latestClose) / latestClose * 100;
 
     dropInfoEl.classList.remove('hide');
+    const abs = Math.abs(pct).toFixed(2);
     if (pct < 0) {
-      dropInfoEl.innerHTML = `距低估定投还需下跌 <b class="text-down">${pct.toFixed(2)}%</b>`;
+      dropInfoEl.innerHTML = `距低估定投还需下跌 <b class="text-down">${abs}%</b>`;
     } else {
-      dropInfoEl.innerHTML = `已跌破低估定投 <b class="text-down">+${pct.toFixed(2)}%</b>`;
+      dropInfoEl.innerHTML = `已跌破低估定投线 <b class="text-down">${abs}%</b>`;
     }
   }
 
@@ -538,8 +535,11 @@ const INDEX_TRENDS = {
         let res = `<b>${params[0].axisValue}</b><br/>`;
         const p = params.find(p => p.seriesType === 'candlestick');
         if (p) {
-          const [open, close, low, high] = p.data.slice(1); // data[0] 是 index，后续是 OHLC
-          const color = close >= open ? '#ef4444' : '#22c55e';
+          // ECharts 5 的 candlestick params.data 就是 [开, 收, 低, 高]，
+          // 旧代码多切了一位，导致开盘=收盘、最低=最高、最高=undefined
+          const raw = Array.isArray(p.data) ? p.data : [];
+          const [open, close, low, high] = raw.length >= 4 ? raw.slice(-4) : raw;
+          const color = close >= open ? t.lineRed : t.lineGreen;
           res += `开盘: ${open}<br/>收盘: <span style="color:${color}">${close}</span><br/>`;
           res += `最低: ${low}<br/>最高: ${high}`;
         }
@@ -570,7 +570,7 @@ const INDEX_TRENDS = {
         // 关键：Y 轴最小值 = 当前可见最低数据 × 95%（即最多往下 5%）
         // 使用 Math.floor 取整，避免小数刻度导致渲染重叠（修复左下角重叠）
         min: function (value) {
-          return isNaN(value.min) ? 0 : Math.floor(value.min * 0.70);
+          return isNaN(value.min) ? 0 : Math.floor(value.min * 0.95);
         },
         // 隐藏最底部的刻度标签，防止与 X 轴第一个标签重叠
         axisLabel: {
@@ -588,10 +588,10 @@ const INDEX_TRENDS = {
           height: 20,
           start: defaultStart,
           end: 100,
-          borderColor: 'transparent',
+          borderColor: t.zoomBorder,
           backgroundColor: 'transparent',
-          fillerColor: 'rgba(56, 189, 248, 0.15)',
-          handleStyle: { color: '#38bdf8' },
+          fillerColor: t.zoomFill,
+          handleStyle: { color: t.zoomHandle },
           textStyle: { color: t.text }
         }
       ],
@@ -601,10 +601,10 @@ const INDEX_TRENDS = {
           type: 'candlestick',
           data: candleData,
           itemStyle: {
-            color: '#ef4444', // 阳线红
-            color0: '#22c55e', // 阴线绿
-            borderColor: '#ef4444',
-            borderColor0: '#22c55e'
+            color: t.lineRed, // 阳线红
+            color0: t.lineGreen, // 阴线绿
+            borderColor: t.lineRed,
+            borderColor0: t.lineGreen
           }
         },
         ...trendSeries

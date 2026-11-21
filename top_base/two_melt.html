@@ -6,28 +6,17 @@
 <title>两融出清信号 · 数据中心</title>
 <meta name="nav-title" content="两融出清信号">
 <meta name="nav-group" content="顶底部研究">
+<meta name="nav-order" content="1">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230b1220'/%3E%3Cpath d='M6 24 L13 15 L19 19 L26 8' stroke='%2338bdf8' stroke-width='2.4' fill='none'/%3E%3C/svg%3E">
 <link rel="stylesheet" href="../common/common.css">
 <script src="https://fastly.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js"></script>
 <style>
   *{box-sizing:border-box}
 
-  .main-content{padding:22px 18px 28px;background:var(--bg)}
-  .stage{width:100%;max-width:1120px;margin:0 auto}
-
-  .brand-title{font-size:18px !important;letter-spacing:.5px}
-  .brand-logo{width:26px !important;height:26px !important}
-  .brand-logo svg{width:20px !important;height:20px !important}
-  .sidebar-header{padding:18px 12px 16px 16px}
-
-  header{display:block;margin-bottom:16px}
-  header h1{margin:0;font-size:24px;font-weight:700;letter-spacing:-.02em;color:var(--text)}
-  header p{margin:7px 0 0;font-size:13px;color:var(--muted);line-height:1.6}
+  .stage{width:100%;max-width:var(--content-max, 1200px);margin:0 auto}
 
   .num{font-variant-numeric:tabular-nums}
 
-  .card{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:18px 20px;
-        box-shadow:0 8px 24px rgba(15,23,42,.07),0 2px 6px rgba(15,23,42,.04)}
   body.theme-dark .card{box-shadow:0 12px 30px rgba(0,0,0,.5),inset 0 1px 0 rgba(255,255,255,.04)}
 
   .kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
@@ -45,11 +34,6 @@
   .ch-head{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap}
   .ch-head h2{margin:0;font-size:15px;font-weight:600;color:var(--text)}
   .hint{font-size:12px;color:var(--muted);margin-top:5px;line-height:1.6}
-  .seg{display:flex;background:var(--panel-2);border:1px solid var(--line);border-radius:9px;padding:2px}
-  .seg button{font:inherit;font-size:12px;padding:5px 12px;border:0;background:transparent;
-              color:var(--muted);border-radius:7px;cursor:pointer;transition:.15s}
-  .seg button:hover{color:var(--text)}
-  .seg button[aria-pressed="true"]{background:var(--accent-soft);color:var(--accent);font-weight:600}
   #chart{width:100%;height:390px;margin-top:4px}
 
   .note{margin-top:12px;padding:9px 12px;background:var(--accent-soft);
@@ -75,23 +59,21 @@
     header h1{font-size:20px}
     #chart{height:300px}
     .card{padding:14px;border-radius:12px}
-    .seg button{padding:5px 9px;font-size:12px}
+    .seg button{padding:5px 12px;font-size:12px}
   }
 </style>
-<!-- 导航：一级 nav-group / 子分组 nav-sub / 菜单项 nav-title / 排序 nav-order（可删任意一行） -->
-<meta name="nav-group" content="顶底部研究">
-<meta name="nav-title" content="两融出清信号">
-<meta name="nav-order" content="1">
 </head>
-<body class="theme-light">
+<body class="theme-dark">
 <div class="app-layout" id="appLayout">
 
   <main class="main-content">
     <div class="stage">
 
       <header>
-        <h1>两融出清信号</h1>
-        <p id="sub">两融创新低、平均股价不新低 —— 唯一在数据里站得住的规则</p>
+        <div>
+          <h1>两融出清信号</h1>
+          <p id="sub">两融创新低、平均股价不新低 —— 唯一在数据里站得住的规则</p>
+        </div>
       </header>
 
       <section class="kpis" id="kpis"></section>
@@ -165,13 +147,15 @@ function rollingMin(arr,w){
 
 function build(){
   const A=MARKET_DATA&&MARKET_DATA.ashare;
-  if(!A||!MARGIN_DATA) return false;
+  const M=window.MARGIN_DATA;
+  if(!A||!M||!Array.isArray(M.rows)) return false;
 
-  const asc=MARGIN_DATA.rows.slice().reverse()
+  const asc=M.rows.slice().reverse()
     .filter(r=>A[r[0]]&&A[r[0]].price)
     .map(r=>[r[0],r[1],A[r[0]].price]);
 
   const n=asc.length;
+  if(n<2) return false;
   const dates=asc.map(r=>r[0]);
   const bal=asc.map(r=>r[1]);
   const pr=asc.map(r=>r[2]);
@@ -186,7 +170,7 @@ function build(){
   const ev=[];
   for(const i of raw){ if(!ev.length||i-ev[ev.length-1]>=20) ev.push(i); }
 
-  const meta=MARGIN_DATA.meta||{}, pm=MARKET_DATA.meta||{};
+  const meta=M.meta||{}, pm=MARKET_DATA.meta||{};
   S={asc,n,dates,bal,pr,minB,minP,ev,last:n-1,meta,pm,
      dm:meta.end||asc[n-1][0],
      dp:(pm.avg_price_updated_at||'').slice(0,10)||asc[n-1][0]};
@@ -200,6 +184,7 @@ function deviations(){
 
 function footText(full){
   const arr=deviations();
+  if(!arr.length) return '暂无历史触发记录';
   const wide=arr.filter(x=>x.off>0.15);
   const near=arr.filter(x=>x.off<=0.15);
   if(!wide.length){
@@ -303,7 +288,7 @@ function draw(){
       {type:'value',position:'left',scale:true,
        axisLine:{show:false},axisTick:{show:false},
        splitLine:{lineStyle:{color:T.grid}},
-       axisLabel:{...text,color:T.text,formatter:v=>v/10000+' 万亿'}},
+       axisLabel:{...text,color:T.text,formatter:v=>(v/10000).toFixed(1)+' 万亿'}},
       {type:'value',position:'right',scale:true,
        axisLine:{show:false},axisTick:{show:false},splitLine:{show:false},
        axisLabel:{...text,color:T.text}}

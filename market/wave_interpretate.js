@@ -188,6 +188,10 @@
 
     // 序列
     var startForecastIdx = ymIndex(forecastStartYM);
+    // 默认视窗显示最近 10 年，避免 20 年数据挤在一屏里看不清
+    var zoomStart = allMonths.length > 1
+      ? Math.max(0, (1 - 120 / (allMonths.length - 1)) * 100)
+      : 0;
     var realSeries = [], forecastSeries = [];
     allMonths.forEach(function (ym) {
       if (ymIndex(ym) < startForecastIdx && realObj[ym]) {
@@ -300,7 +304,7 @@
         axisLine: { show: false }, axisTick: { show: false }
       },
       dataZoom: window.buildDataZoom(
-        { xAxisIndex: 0, start: 0, end: 100, minValueSpan: 3 },
+        { xAxisIndex: 0, start: zoomStart, end: 100, minValueSpan: 3 },
         isMobile, isMobile ? 5 : 10, theme
       ),
       series: [

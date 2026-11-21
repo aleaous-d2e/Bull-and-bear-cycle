@@ -31,6 +31,8 @@ EXCLUDE_PATHS = set()                    # 按相对根的路径精确排除，�
 
 # ---------- 其他 ----------
 DEFAULT_GROUP = "顶底部研究"
+# 与首页板块顺序保持一致；未列出的分组排在最后
+GROUP_ORDER = ["顶底部研究", "资金结构", "市场估值", "未来研究", "研究报告"]
 BEGIN_MARK = "/* NAV:BEGIN */"
 END_MARK = "/* NAV:END */"
 
@@ -106,7 +108,10 @@ def main():
         p["group"] = p["group"] or declared.get(p["dir"]) or DEFAULT_GROUP
         p.pop("dir", None)
 
-    pages.sort(key=lambda p: (p["group"], p["sub"], p["order"], p["title"]))
+    def group_rank(name):
+        return GROUP_ORDER.index(name) if name in GROUP_ORDER else len(GROUP_ORDER)
+
+    pages.sort(key=lambda p: (group_rank(p["group"]), p["group"], p["sub"], p["order"], p["title"]))
 
     payload = [{k: p[k] for k in ("path", "title", "group", "sub", "order")} for p in pages]
     items = ",\n".join("    " + json.dumps(p, ensure_ascii=False, separators=(",", ":"))

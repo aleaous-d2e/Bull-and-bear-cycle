@@ -2,6 +2,7 @@
 <html lang="zh-CN">
 <head>
 <meta charset="utf-8">
+<link rel="icon" type="image/svg+xml" href="../common/favicon.svg">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
 <title>牛熊指标</title>
 <!-- 引入公共样式 -->
@@ -11,8 +12,7 @@
 <script src="market_data.js"></script>
 
 <!-- 导航：一级 nav-group / 子分组 nav-sub / 菜单项 nav-title / 排序 nav-order（可删任意一行） -->
-<meta name="nav-group" content="顶底部研究">
-<meta name="nav-sub" content="市场估值">
+<meta name="nav-group" content="市场估值">
 <meta name="nav-title" content="牛熊指标">
 <meta name="nav-order" content="1">
 </head>
@@ -71,9 +71,11 @@
         <div class="card chart-card chart-price-card">
           <div class="chart-toolbar">
             <div class="chart-title">平均股价（月线）</div>
-            <button class="trend-btn active high" id="trendBtnHigh">高位风险</button>
-            <button class="trend-btn active low"  id="trendBtnLow">国运支撑</button>
-            <button class="trend-btn active mix"  id="trendBtnMix">低估定投</button>
+            <div class="toolbar-right">
+              <button class="trend-btn active high" id="trendBtnHigh">高位风险</button>
+              <button class="trend-btn active low"  id="trendBtnLow">国运支撑</button>
+              <button class="trend-btn active mix"  id="trendBtnMix">低估定投</button>
+            </div>
           </div>
           <div id="chart-price" class="chart chart-sm"></div>
         </div>

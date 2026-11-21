@@ -11,12 +11,12 @@
      字段：path 相对项目根 / title 二级导航文案 / group 一级导航 / sub 子分组 / order 排序 */
   /* NAV:BEGIN */
   const NAV_PAGES = [
-    {"path":"etf/etf_share.html","title":"ETF 份额变动","group":"顶底部研究","sub":"","order":1},
-    {"path":"etf/etf_gjd_report.html","title":"国家队行为框架","group":"研究报告","sub":"","order":2},
     {"path":"top_base/two_melt.html","title":"两融出清信号","group":"顶底部研究","sub":"","order":1},
     {"path":"top_base/top_base.html","title":"市场顶底部研究","group":"顶底部研究","sub":"","order":2},
+    {"path":"etf/etf_share.html","title":"ETF 份额变动","group":"资金结构","sub":"份额跟踪","order":1},
+    {"path":"etf/etf_gjd_report.html","title":"国家队行为框架","group":"资金结构","sub":"份额跟踪","order":2},
     {"path":"market/avg_price.html","title":"牛熊指标","group":"市场估值","sub":"","order":1},
-    {"path":"market/wave_interpretate.html","title":"平均股价推演","group":"未来演绎","sub":"","order":2}
+    {"path":"market/wave_interpretate.html","title":"平均股价推演","group":"市场估值","sub":"","order":2}
   ];
   /* NAV:END */
 
@@ -211,16 +211,15 @@
   /* ================= 3. 导航菜单高亮 ================= */
 
   const highlightMenu = () => {
-    const path = window.location.pathname.split('/').pop() || 'avg_price.html';
+    const path = decodeURIComponent(window.location.pathname);
     const menuItems = document.querySelectorAll('.menu-item');
 
     menuItems.forEach(link => {
       const href = link.getAttribute('href');
-      if (href === path) {
-        link.classList.add('active');
-      } else {
-        link.classList.remove('active');
-      }
+      if (!href) return;
+      // href 是站点根绝对地址，不能直接和当前 pathname 的末段比较
+      const linkPath = decodeURIComponent(new URL(href, location.href).pathname);
+      link.classList.toggle('active', linkPath === path);
     });
   };
 

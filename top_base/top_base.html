@@ -2,6 +2,7 @@
 <html lang="zh-CN">
 <head>
 <meta charset="utf-8" />
+<link rel="icon" type="image/svg+xml" href="../common/favicon.svg">
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>市场顶底部研究</title>
 
@@ -22,22 +23,31 @@
       <div class="wrap">
         <header>
           <div>
-            <h1>市场底部研究</h1>
+            <h1>市场顶底部研究</h1>
           </div>
         </header>
 
         <div class="charts-grid">
           <!-- ================= 指数月线（全 ECharts 重构） ================= -->
           <div class="chart-card main-chart chart-price-card">
+            <div class="chart-header">
+              <div>
+                <div class="chart-title">上证指数月线与趋势轨道</div>
+                <div class="chart-legend">
+                  <span class="legend-item"><i data-color="red"></i>K线</span>
+                  <span class="legend-item"><i data-color="blue"></i>国运支撑</span>
+                  <span class="legend-item"><i data-color="purple"></i>低估定投</span>
+                  <span class="legend-item"><i data-color="red"></i>高位风险</span>
+                </div>
+              </div>
+              <div class="gran-switch" id="indexSwitch"></div>
+            </div>
             <div class="chart-toolbar">
               <div class="toolbar-left">
                 <button class="trend-btn active low" id="btnLow">国运支撑</button>
                 <button class="trend-btn active mix" id="btnMix">低估定投</button>
                 <button class="trend-btn active high" id="btnHigh">高风险</button>
                 <div class="drop-info hide" id="dropInfo"></div>
-              </div>
-              <div class="toolbar-right">
-                <div class="gran-switch" id="indexSwitch"></div>
               </div>
             </div>
             <!-- 注意这里改为了 id="monthChart" -->
@@ -86,6 +96,8 @@
             </div>
           </div>
         </div>
+
+        <footer>数据来源: AkShare · 上证指数（腾讯优先 / 新浪兜底）</footer>
       </div>
     </main>
   </div>

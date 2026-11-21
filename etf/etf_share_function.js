@@ -105,7 +105,21 @@ window.__ETF_GROUPS__ = [
     return m;
   }
 
+  /* Lightweight Charts 不会读取 CSS 变量，明暗切换时手动同步配色 */
+  function chartTheme() {
+    const isLight = document.body.classList.contains("theme-light");
+    return {
+      text: isLight ? "#4b5563" : "#8ba0bd",
+      grid: isLight ? "rgba(107,114,128,0.08)" : "rgba(139,160,189,0.06)",
+      cross: isLight ? "rgba(107,114,128,0.35)" : "rgba(139,160,189,0.3)",
+      labelBg: isLight ? "#6b7280" : "#22314d",
+    };
+  }
+
   const shortName = (code) => (NAME_MAP[code] || code).replace("ETF", "");
+
+  // 只保留真实有数据的代码，避免切到空 Tab 后图表一片空白
+  const codesWithData = (g) => (g.codes || []).filter((c) => (DATA.series[c] || []).length > 0);
 
   const groupHasData = (g) =>
     Array.isArray(g.codes) &&
@@ -113,10 +127,11 @@ window.__ETF_GROUPS__ = [
     g.codes.some((c) => (DATA.series[c] || []).length > 0);
 
   function buildTabs(group) {
-    if (group.codes.length > 1) {
+    const codes = codesWithData(group);
+    if (codes.length > 1) {
       return [
-        { label: "全部", codes: group.codes.slice() },
-        ...group.codes.map(c => ({ label: shortName(c), codes: [c] }))
+        { label: "全部", codes: codes.slice() },
+        ...codes.map(c => ({ label: shortName(c), codes: [c] }))
       ];
     }
     return null;
@@ -221,7 +236,7 @@ window.__ETF_GROUPS__ = [
 
     const items = [];
     codesInCategory.forEach(code => {
-      const pts = DATA.series[code] || [];
+      const pts = sortByDate(DATA.series[code] || []);
       if (!pts.length) return;
 
       items.push({
@@ -312,7 +327,7 @@ window.__ETF_GROUPS__ = [
 
   function initDOM() {
     gridEl.innerHTML = GROUPS.map((g, idx) => {
-      const legendHtml = g.codes.map(c => `
+      const legendHtml = codesWithData(g).map(c => `
         <span class="legend-item"><i style="background:${CODE_COLOR[c] || PALETTE[0]}"></i>${shortName(c)}</span>
       `).join("");
 
@@ -348,18 +363,35 @@ window.__ETF_GROUPS__ = [
 
   function createChart(containerId, group, groupIdx) {
     const el = document.getElementById(containerId);
+    const th = chartTheme();
     const chart = LightweightCharts.createChart(el, {
       autoSize: true,
-      layout: { background: { type: "solid", color: "transparent" }, textColor: "#8ba0bd", fontSize: 11, attributionLogo: false },
-      grid: { vertLines: { color: "rgba(139,160,189,0.04)" }, horzLines: { color: "rgba(139,160,189,0.04)" } },
+      layout: { background: { type: "solid", color: "transparent" }, textColor: th.text, fontSize: 11, attributionLogo: false },
+      grid: { vertLines: { color: th.grid }, horzLines: { color: th.grid } },
       crosshair: {
         mode: LightweightCharts.CrosshairMode.Normal,
-        vertLine: { color: "rgba(139,160,189,0.3)", width: 1, style: 2, labelBackgroundColor: "#22314d" },
-        horzLine: { color: "rgba(139,160,189,0.3)", width: 1, style: 2, labelBackgroundColor: "#22314d" },
+        vertLine: { color: th.cross, width: 1, style: 2, labelBackgroundColor: th.labelBg },
+        horzLine: { color: th.cross, width: 1, style: 2, labelBackgroundColor: th.labelBg },
       },
-      rightPriceScale: { borderColor: "transparent", scaleMargins: { top: 0.2, bottom: 0.2 } },
+      rightPriceScale: { borderColor: "transparent", scaleMargins: { top: 0.12, bottom: 0.06 } },
       leftPriceScale: { visible: false },
-      timeScale: { borderColor: "transparent", rightOffset: 2, barSpacing: 4 },
+      timeScale: {
+        borderColor: "transparent",
+        rightOffset: 2,
+        barSpacing: 4,
+        tickMarkFormatter: (time) => {
+          // LWC v4 在日线数据下可能传 'YYYY-MM-DD' 字符串，而非 BusinessDay 对象
+          let month;
+          if (typeof time === "string") {
+            month = Number(time.slice(5, 7));
+          } else if (typeof time === "object" && time !== null) {
+            month = time.month;
+          } else {
+            month = new Date(time * 1000).getMonth() + 1;
+          }
+          return Number.isFinite(month) ? `${month}月` : "";
+        },
+      },
       handleScroll: { mouseWheel: true, pressedMouseMove: true },
       handleScale: { mouseWheel: true, pinch: true, axisPressedMouseMove: true },
     });
@@ -368,7 +400,8 @@ window.__ETF_GROUPS__ = [
       chart, group, groupIdx,
       seriesList: [], seriesByCode: {}, timeIndex: {}, markerInfo: {},
       splitMarkers: {}, splitEventMap: {},
-      colorMap: buildColorMap(group), tabs: buildTabs(group), visibleCodes: group.codes.slice()
+      colorMap: buildColorMap(group), tabs: buildTabs(group),
+      visibleCodes: codesWithData(group)
     };
 
     if (ctx.tabs && ctx.tabs.length > 1) {
@@ -622,9 +655,10 @@ window.__ETF_GROUPS__ = [
       });
 
       if (isNorm && ctx.seriesList.length > 0) {
+        const isLight = document.body.classList.contains("theme-light");
         ctx.seriesList[0].createPriceLine({
           price: 100,
-          color: "rgba(255,255,255,0.15)",
+          color: isLight ? "rgba(0,0,0,0.18)" : "rgba(255,255,255,0.15)",
           lineWidth: 1,
           lineStyle: 2,
           axisLabelVisible: false,
@@ -645,20 +679,30 @@ window.__ETF_GROUPS__ = [
       b.classList.toggle("active", b.dataset.months === String(months));
     });
 
-    if (!allRealDates.length) return;
+    // 用“当前可见图表”的并集算区间，避免行业/宽基互相拖着对方的时间轴
+    const visibleDates = [];
+    chartInstances.forEach((ctx) => {
+      const card = document.getElementById(`card-${ctx.groupIdx}`);
+      if (card && card.style.display === "none") return;
+      ctx.group.codes.forEach((code) => {
+        (DATA.series[code] || []).forEach((p) => visibleDates.push(p.date));
+      });
+    });
+    const dates = [...new Set(visibleDates)].sort();
+    if (!dates.length) return;
 
-    const lastDateStr = allRealDates[allRealDates.length - 1];
-    let fromStr = allRealDates[0];
+    const lastDateStr = dates[dates.length - 1];
+    let fromStr = dates[0];
 
     if (months > 0) {
-      const lastDate = new Date(lastDateStr);
+      const lastDate = new Date(lastDateStr + "T00:00:00");
       const targetDate = new Date(lastDate);
       targetDate.setMonth(targetDate.getMonth() - months);
       const targetTime = targetDate.getTime();
 
-      for (let i = 0; i < allRealDates.length; i++) {
-        if (new Date(allRealDates[i]).getTime() >= targetTime) {
-          fromStr = allRealDates[i];
+      for (let i = 0; i < dates.length; i++) {
+        if (new Date(dates[i] + "T00:00:00").getTime() >= targetTime) {
+          fromStr = dates[i];
           break;
         }
       }
@@ -677,6 +721,21 @@ window.__ETF_GROUPS__ = [
   rangeBtns.forEach((btn) => {
     btn.addEventListener("click", () => { applyRange(parseInt(btn.dataset.months, 10)); });
   });
+
+  function applyChartTheme() {
+    const th = chartTheme();
+    chartInstances.forEach((ctx) => {
+      ctx.chart.applyOptions({
+        layout: { textColor: th.text },
+        grid: { vertLines: { color: th.grid }, horzLines: { color: th.grid } },
+        crosshair: {
+          vertLine: { color: th.cross, labelBackgroundColor: th.labelBg },
+          horzLine: { color: th.cross, labelBackgroundColor: th.labelBg },
+        },
+      });
+    });
+  }
+  window.addEventListener("themeChanged", () => requestAnimationFrame(applyChartTheme));
 
   modeBtns.forEach((btn) => {
     btn.addEventListener("click", () => {

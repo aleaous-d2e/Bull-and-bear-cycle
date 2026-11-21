@@ -43,7 +43,7 @@ TASKS = [
     ("market", "avg_price.py", "1. market：沪深总市值与平均股价（当天）"),
     ("etf", "etf_share.py", "2. etf：ETF 份额增量（含池审查）"),
     ("top_base", "top_base.py", "3. top_base：破净比例（每日）+ 指数月线（月度）"),
-    ("two_melt", "two_melt.py", "4. two_melt：沪深北两融余额合计（当天）"),
+    ("top_base", "two_melt.py", "4. two_melt：沪深北两融余额合计（当天）"),
 ]
 
 

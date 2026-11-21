@@ -2,6 +2,7 @@
 <html lang="zh-CN">
 <head>
 <meta charset="utf-8">
+<link rel="icon" type="image/svg+xml" href="./common/favicon.svg">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>数据中心</title>
 <link rel="stylesheet" href="./common/common.css">
@@ -14,8 +15,7 @@
   .entry:hover { transform: translateY(-2px); border-color: var(--accent); }
   .entry h3 { font-size: 15px; color: var(--text); margin: 0 0 8px; }
   .entry p { font-size: 12.5px; color: var(--muted); line-height: 1.7; margin: 0; }
-  .tag { display: inline-block; font-size: 11px; padding: 2px 8px; border-radius: 999px;
-         color: var(--accent); background: var(--accent-soft); margin-bottom: 10px; }
+  .entry .tag { margin-bottom: 10px; }
 </style>
 </head>
 <body class="theme-dark">
@@ -26,7 +26,7 @@
       <p class="lead">A 股资金结构与顶底部研究。每个页面独立，侧栏导航由 <code>common/build_nav.py</code> 扫描目录自动生成。</p>
 
       <div class="grid">
-        <a class="entry chart-card" href="./top_base/两融看板.html">
+        <a class="entry chart-card" href="./top_base/two_melt.html">
           <span class="tag">顶底部研究</span>
           <h3>两融出清信号</h3>
           <p>两融余额创 250 日新低、平均股价不再新低 —— 杠杆端的出清观测。</p>

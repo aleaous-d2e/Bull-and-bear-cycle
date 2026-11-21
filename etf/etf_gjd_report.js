@@ -5,6 +5,29 @@
   const i2ym = i => Math.floor(i/12) + '-' + String(i%12+1).padStart(2,'0');
   const rnd  = s => { const x = Math.sin(s) * 43758.5453; return x - Math.floor(x); };
 
+  /* 主题文字 / 网格 / 涨跌色，统一跟随 common.js 的 getChartTheme() */
+  function theme() {
+    if (window.getChartTheme) return window.getChartTheme();
+    const isLight = document.body.classList.contains('theme-light');
+    return {
+      isLight,
+      text: isLight ? '#6b7280' : '#8ba0bd',
+      grid: isLight ? '#f3f4f6' : 'rgba(139,160,189,0.10)',
+      axis: isLight ? '#e5e7eb' : 'rgba(139,160,189,0.22)',
+      lineRed: isLight ? '#ef4444' : '#f87171',
+      lineGreen: isLight ? '#10b981' : '#34d399',
+      lineBlue: isLight ? '#2563eb' : '#38bdf8',
+      tooltipBg: isLight ? '#ffffff' : '#111c30',
+      crossLine: isLight ? '#d1d5db' : 'rgba(139,160,189,0.4)',
+    };
+  }
+
+  function hexToRgba(hex, a) {
+    const h = hex.replace('#', '');
+    const n = parseInt(h.length === 3 ? h.split('').map(c => c + c).join('') : h, 16);
+    return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${a})`;
+  }
+
   const PIVOTS = [
     { d:'2007-10', v:6124, lab:'6124', pos:'above' },
     { d:'2008-10', v:1664, lab:'1664', pos:'below' },
@@ -48,8 +71,9 @@
   const X = i => PAD.l + (i - X0) / (X1 - X0) * PW;
   const Y = v => PAD.t + (1 - (v - YMIN) / (YMAX - YMIN)) * PH;
 
+  /* ---------- 折线数据（固定随机种子，刷新不变） ---------- */
   const segs = [];
-  const ALL  = [];
+  const ALL = [];
 
   for (let k = 0; k < PIVOTS.length - 1; k++) {
     const a = PIVOTS[k], b = PIVOTS[k + 1];
@@ -77,101 +101,106 @@
     }
   }
 
-  let s = `<defs>
-    <linearGradient id="gUp" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0%" stop-color="#c94137" stop-opacity="0.14"/>
-      <stop offset="100%" stop-color="#c94137" stop-opacity="0.01"/>
-    </linearGradient>
-    <linearGradient id="gDown" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0%" stop-color="#2f855a" stop-opacity="0.12"/>
-      <stop offset="100%" stop-color="#2f855a" stop-opacity="0.01"/>
-    </linearGradient>
-  </defs>`;
-
-  for (let v = 1500; v <= 6500; v += 1000) {
-    const y = Y(v);
-    s += `<line x1="${PAD.l}" y1="${y}" x2="${W - PAD.r}" y2="${y}" stroke="#eef0f4" stroke-width="1"/>`;
-    s += `<text class="ax-y" x="${PAD.l - 14}" y="${y + 4}" text-anchor="end">${v}</text>`;
-  }
-  s += `<line x1="${PAD.l}" y1="${Y_BASE}" x2="${W - PAD.r}" y2="${Y_BASE}" stroke="#dfe3ea" stroke-width="1.2"/>`;
-
-  for (let yr = 2008; yr <= 2026; yr++) {
-    const i = yr * 12;
-    if (i < X0 || i > X1) continue;
-    const x = X(i);
-    s += `<line x1="${x}" y1="${PAD.t}" x2="${x}" y2="${Y_BASE}" stroke="#f2f4f7" stroke-width="1"/>`;
-    s += `<text class="ax" x="${x}" y="${Y_BASE + 24}" text-anchor="middle">${yr}</text>`;
-  }
-
-  let evIndex = 1;
-  const evItems = [];
-  for (const ev of EVENTS) {
-    const i = ym2i(ev.d);
-    if (i < X0 || i > X1) continue;
-    const x = X(i);
-    s += `<line x1="${x}" y1="${PAD.t}" x2="${x}" y2="${Y_BASE}" stroke="#2b6cb0" stroke-width="1.8" stroke-dasharray="5 5" opacity="0.6"/>`;
-    const yb = Y_BASE + 48;
-    s += `<g><title>${ev.d} · ${ev.t}</title>`;
-    s += `<circle cx="${x}" cy="${yb}" r="9" fill="#f0f7ff" stroke="#2b6cb0" stroke-width="1.5" opacity="0.95"/>`;
-    s += `<text x="${x}" y="${yb + 3.5}" text-anchor="middle" font-size="10.5" font-weight="700" fill="#2b6cb0">${evIndex}</text>`;
-    s += `</g>`;
-    evItems.push(`<li><b>${evIndex}</b> <span class="ev-date">${ev.d}</span> ${ev.t}</li>`);
-    evIndex++;
-  }
-  const listHtml = '<div class="ev-list"><div class="ev-list-title">国家队动作节点（对应图中底部数字标记）</div><ul>'
-                 + evItems.join('') + '</ul></div>';
-
-  for (const seg of segs) {
-    const pts = seg.pts;
-    if (pts.length < 2) continue;
-    let d = '';
-    for (let i = 0; i < pts.length; i++) {
-      d += (i === 0 ? 'M' : 'L') + X(pts[i].i).toFixed(1) + ',' + Y(pts[i].v).toFixed(1);
-    }
-    const first = pts[0], last = pts[pts.length - 1];
-    const dArea = d + `L${X(last.i).toFixed(1)},${Y_BASE}L${X(first.i).toFixed(1)},${Y_BASE}Z`;
-    const fill = seg.up ? 'url(#gUp)' : 'url(#gDown)';
-    const stroke = seg.up ? '#c94137' : '#2f855a';
-
-    s += `<path d="${dArea}" fill="${fill}" stroke="none"/>`;
-    s += `<path d="${d}" fill="none" stroke="${stroke}" stroke-width="2.1" stroke-linejoin="round" stroke-linecap="round"/>`;
-  }
-
-  for (const pv of PIVOTS) {
-    const i = ym2i(pv.d);
-    const x = X(i), y = Y(pv.v);
-    const color = pv.pos === 'above' ? '#c94137' : '#2f855a';
-
-    s += `<circle cx="${x}" cy="${y}" r="${pv.minor ? 3 : 4.4}" fill="#fff" stroke="${color}" stroke-width="2"/>`;
-
-    if (pv.lab) {
-      const dx = pv.dx || 0;
-      let dy = pv.dy || 0;
-      dy += pv.pos === 'above' ? -13 : 22;
-      const anchor = pv.anchor || 'middle';
-      s += `<text class="plab" x="${(x + dx).toFixed(1)}" y="${(y + dy).toFixed(1)}" text-anchor="${anchor}">${pv.lab}</text>`;
-    } else if (pv.minor) {
-      const dy = pv.pos === 'above' ? -10 : 16;
-      s += `<text class="plab minor" x="${x.toFixed(1)}" y="${(y + dy).toFixed(1)}" text-anchor="middle">${pv.v}</text>`;
-    }
-  }
-
-  s += `<text class="ttl" x="${PAD.l - 14}" y="${PAD.t - 22}" text-anchor="end">上证指数</text>`;
-  s += `<text class="ttl" x="${PAD.l}" y="${PAD.t - 22}" text-anchor="start">· 点位</text>`;
-
-  s += `<line id="cross" x1="0" y1="${PAD.t}" x2="0" y2="${Y_BASE}" stroke="#12395f" stroke-width="1" stroke-dasharray="3 3" opacity="0"/>`;
-  s += `<circle id="hdot" cx="0" cy="0" r="4.5" fill="#12395f" opacity="0"/>`;
-  s += `<rect id="hit" x="${PAD.l}" y="${PAD.t}" width="${PW}" height="${PH}" fill="transparent" style="cursor:crosshair"/>`;
-
   const svg = document.getElementById('chart');
-  svg.innerHTML = s;
-
-  document.querySelector('.chart-scroll').insertAdjacentHTML('afterend', listHtml);
-
   const tip = document.getElementById('tip');
-  const cross = svg.querySelector('#cross');
-  const hdot = svg.querySelector('#hdot');
-  const hit = svg.querySelector('#hit');
+  const evList = document.getElementById('evList');
+  let cross, hdot, hit;
+
+  function buildSvg() {
+    const T = theme();
+    const upColor = T.lineRed;
+    const downColor = T.lineGreen;
+
+    let s = `<defs>
+      <linearGradient id="gUp" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0%" stop-color="${upColor}" stop-opacity="0.14"/>
+        <stop offset="100%" stop-color="${upColor}" stop-opacity="0.01"/>
+      </linearGradient>
+      <linearGradient id="gDown" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0%" stop-color="${downColor}" stop-opacity="0.12"/>
+        <stop offset="100%" stop-color="${downColor}" stop-opacity="0.01"/>
+      </linearGradient>
+    </defs>`;
+
+    for (let v = 1500; v <= 6500; v += 1000) {
+      const y = Y(v);
+      s += `<line x1="${PAD.l}" y1="${y}" x2="${W - PAD.r}" y2="${y}" stroke="${T.grid}" stroke-width="1"/>`;
+      s += `<text x="${PAD.l - 14}" y="${y + 4}" text-anchor="end" fill="${T.text}" font-size="11">${v}</text>`;
+    }
+    s += `<line x1="${PAD.l}" y1="${Y_BASE}" x2="${W - PAD.r}" y2="${Y_BASE}" stroke="${T.axis}" stroke-width="1.2"/>`;
+
+    for (let yr = 2008; yr <= 2026; yr++) {
+      const i = yr * 12;
+      if (i < X0 || i > X1) continue;
+      const x = X(i);
+      s += `<line x1="${x}" y1="${PAD.t}" x2="${x}" y2="${Y_BASE}" stroke="${T.grid}" stroke-width="1"/>`;
+      s += `<text x="${x}" y="${Y_BASE + 24}" text-anchor="middle" fill="${T.text}" font-size="11">${yr}</text>`;
+    }
+
+    let evIndex = 1;
+    const evItems = [];
+    for (const ev of EVENTS) {
+      const i = ym2i(ev.d);
+      if (i < X0 || i > X1) continue;
+      const x = X(i);
+      s += `<line x1="${x}" y1="${PAD.t}" x2="${x}" y2="${Y_BASE}" stroke="${T.lineBlue}" stroke-width="1.8" stroke-dasharray="5 5" opacity="0.6"/>`;
+      const yb = Y_BASE + 48;
+      s += `<g><title>${ev.d} · ${ev.t}</title>`;
+      s += `<circle cx="${x}" cy="${yb}" r="9" fill="${T.tooltipBg}" stroke="${T.lineBlue}" stroke-width="1.5" opacity="0.95"/>`;
+      s += `<text x="${x}" y="${yb + 3.5}" text-anchor="middle" font-size="10.5" font-weight="700" fill="${T.lineBlue}">${evIndex}</text>`;
+      s += `</g>`;
+      evItems.push(`<li><b>${evIndex}</b> <span class="ev-date">${ev.d}</span> ${ev.t}</li>`);
+      evIndex++;
+    }
+    if (evList) {
+      evList.innerHTML = '<div class="ev-list-title">国家队动作节点（对应图中底部数字标记）</div><ul>'
+        + evItems.join('') + '</ul>';
+    }
+
+    for (const seg of segs) {
+      const pts = seg.pts;
+      if (pts.length < 2) continue;
+      let d = '';
+      for (let i = 0; i < pts.length; i++) {
+        d += (i === 0 ? 'M' : 'L') + X(pts[i].i).toFixed(1) + ',' + Y(pts[i].v).toFixed(1);
+      }
+      const first = pts[0], last = pts[pts.length - 1];
+      const dArea = d + `L${X(last.i).toFixed(1)},${Y_BASE}L${X(first.i).toFixed(1)},${Y_BASE}Z`;
+      const fill = seg.up ? 'url(#gUp)' : 'url(#gDown)';
+      const stroke = seg.up ? upColor : downColor;
+
+      s += `<path d="${dArea}" fill="${fill}" stroke="none"/>`;
+      s += `<path d="${d}" fill="none" stroke="${stroke}" stroke-width="2.1" stroke-linejoin="round" stroke-linecap="round"/>`;
+    }
+
+    for (const pv of PIVOTS) {
+      const i = ym2i(pv.d);
+      const x = X(i), y = Y(pv.v);
+      const color = pv.pos === 'above' ? upColor : downColor;
+
+      s += `<circle cx="${x}" cy="${y}" r="${pv.minor ? 3 : 4.4}" fill="${T.tooltipBg}" stroke="${color}" stroke-width="2"/>`;
+
+      if (pv.lab) {
+        const dx = pv.dx || 0;
+        let dy = pv.dy || 0;
+        dy += pv.pos === 'above' ? -13 : 22;
+        const anchor = pv.anchor || 'middle';
+        s += `<text x="${(x + dx).toFixed(1)}" y="${(y + dy).toFixed(1)}" text-anchor="${anchor}" fill="${color}" font-size="12" font-weight="600">${pv.lab}</text>`;
+      } else if (pv.minor) {
+        const dy = pv.pos === 'above' ? -10 : 16;
+        s += `<text x="${x.toFixed(1)}" y="${(y + dy).toFixed(1)}" text-anchor="middle" fill="${color}" font-size="11" font-weight="500">${pv.v}</text>`;
+      }
+    }
+
+    s += `<text x="${PAD.l - 14}" y="${PAD.t - 22}" text-anchor="end" fill="${T.text}" font-size="12" font-weight="600">上证指数</text>`;
+    s += `<text x="${PAD.l}" y="${PAD.t - 22}" text-anchor="start" fill="${T.text}" font-size="12" font-weight="600">· 点位</text>`;
+
+    s += `<line id="cross" x1="0" y1="${PAD.t}" x2="0" y2="${Y_BASE}" stroke="${T.crossLine}" stroke-width="1" stroke-dasharray="3 3" opacity="0"/>`;
+    s += `<circle id="hdot" cx="0" cy="0" r="4.5" fill="${T.lineBlue}" opacity="0"/>`;
+    s += `<rect id="hit" x="${PAD.l}" y="${PAD.t}" width="${PW}" height="${PH}" fill="transparent" style="cursor:crosshair"/>`;
+
+    return s;
+  }
 
   function nearest(iF) {
     let best = ALL[0], bd = Infinity;
@@ -192,46 +221,63 @@
   }
 
   function hide() {
-    cross.setAttribute('opacity', '0');
-    hdot.setAttribute('opacity', '0');
-    tip.style.opacity = '0';
+    if (cross) cross.setAttribute('opacity', '0');
+    if (hdot) hdot.setAttribute('opacity', '0');
+    if (tip) tip.style.opacity = '0';
   }
 
-  hit.addEventListener('mousemove', function (e) {
-    const r = svg.getBoundingClientRect();
-    const px = (e.clientX - r.left) / r.width * W;
-    if (px < PAD.l || px > W - PAD.r) { hide(); return; }
+  function bindHover() {
+    hit.addEventListener('mousemove', function (e) {
+      const r = svg.getBoundingClientRect();
+      const px = (e.clientX - r.left) / r.width * W;
+      if (px < PAD.l || px > W - PAD.r) { hide(); return; }
 
-    const iF = X0 + (px - PAD.l) / PW * (X1 - X0);
-    const p = nearest(iF);
-    const x = X(p.i), y = Y(p.v);
+      const iF = X0 + (px - PAD.l) / PW * (X1 - X0);
+      const p = nearest(iF);
+      const x = X(p.i), y = Y(p.v);
 
-    cross.setAttribute('x1', x); cross.setAttribute('x2', x);
-    cross.setAttribute('opacity', '0.55');
-    hdot.setAttribute('cx', x); hdot.setAttribute('cy', y);
-    hdot.setAttribute('opacity', '1');
+      cross.setAttribute('x1', x); cross.setAttribute('x2', x);
+      cross.setAttribute('opacity', '0.55');
+      hdot.setAttribute('cx', x); hdot.setAttribute('cy', y);
+      hdot.setAttribute('opacity', '1');
 
-    const ev = eventNear(p.i);
-    tip.innerHTML =
-      '<b>' + i2ym(p.i) + '</b> · ' + Math.round(p.v) + ' 点' +
-      (ev ? '<span class="ev">◆ ' + ev.t + '</span>' : '');
-    tip.style.opacity = '1';
+      const ev = eventNear(p.i);
+      tip.innerHTML =
+        '<b>' + i2ym(p.i) + '</b> · ' + Math.round(p.v) + ' 点' +
+        (ev ? '<span class="ev">◆ ' + ev.t + '</span>' : '');
+      tip.style.opacity = '1';
 
-    const pageX = r.left + x / W * r.width;
-    const pageY = r.top + y / H * r.height;
-    let left = pageX + 16;
-    let top = pageY - 46;
+      const pageX = r.left + x / W * r.width;
+      const pageY = r.top + y / H * r.height;
+      let left = pageX + 16;
+      let top = pageY - 46;
 
-    if (left + tip.offsetWidth > window.innerWidth - 12) {
-      left = pageX - tip.offsetWidth - 16;
-    }
-    if (top < 8) top = 8;
+      if (left + tip.offsetWidth > window.innerWidth - 12) {
+        left = pageX - tip.offsetWidth - 16;
+      }
+      if (top < 8) top = 8;
 
-    tip.style.left = left + 'px';
-    tip.style.top = top + 'px';
-  });
+      tip.style.left = left + 'px';
+      tip.style.top = top + 'px';
+    });
 
-  hit.addEventListener('mouseleave', hide);
+    hit.addEventListener('mouseleave', hide);
+  }
+
+  function render() {
+    svg.innerHTML = buildSvg();
+    cross = svg.querySelector('#cross');
+    hdot = svg.querySelector('#hdot');
+    hit = svg.querySelector('#hit');
+    bindHover();
+  }
+
   window.addEventListener('scroll', hide, { passive: true });
+  window.addEventListener('themeChanged', () => requestAnimationFrame(render));
 
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', render, { once: true });
+  } else {
+    render();
+  }
 })();

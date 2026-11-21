@@ -202,6 +202,8 @@ function valuation(r) {
    3. 数据构建 & 聚合
    ============================================================ */
 function num(v, fallback) {
+  // Number(null) === 0，旧写法会把缺失的 OHLC 当成 0，画出一根假 K 线
+  if (v === null || v === undefined || v === '') return fallback;
   const n = Number(v);
   return Number.isFinite(n) ? n : fallback;
 }
@@ -276,13 +278,15 @@ function renderKPI() {
   const yearNow = GDP_LATEST_YEAR, yearBase = yearNow - 1;
   $('kpi-gdp-label').textContent = 'GDP（' + yearNow + '）';
   const gdpVal = GDP_ANNUAL[yearNow];
-  $('kpi-gdp').innerHTML = (gdpVal / 10000).toFixed(2) + '<small>万亿</small>';
+  $('kpi-gdp').innerHTML = Number.isFinite(gdpVal)
+    ? (gdpVal / 10000).toFixed(2) + '<small>万亿</small>'
+    : '—';
 
   const gdpBase = GDP_ANNUAL[yearBase];
-  setDelta($('kpi-gdp-yoy'), '同比 ' + yearBase + '年 ', gdpBase ? (gdpVal / gdpBase - 1) * 100 : null);
+  setDelta($('kpi-gdp-yoy'), '同比 ' + yearBase + '年 ', (gdpVal && gdpBase) ? (gdpVal / gdpBase - 1) * 100 : null);
 
   $('kpi-ratio-label').textContent = '市值 / GDP（' + (GDP_CURRENT.isEstimate ? GDP_CURRENT.year + 'E' : GDP_CURRENT.year + '年') + '）';
-  $('kpi-ratio').textContent = last.ratio.toFixed(3);
+  $('kpi-ratio').textContent = Number.isFinite(last.ratio) ? last.ratio.toFixed(3) : '—';
 
   const v = valuation(last.ratio);
   const rd = $('kpi-ratio-d');
@@ -344,7 +348,7 @@ function getValuationMarks(theme) {
   ].map(m => ({
     yAxis: m.y,
     lineStyle: { color: m.color, type: 'dashed', width: 1 },
-    label: { formatter: m.label, color: m.color, fontWeight: 600 }
+    label: { formatter: m.label, color: m.color, fontWeight: 600, position: 'insideEndTop' }
   }));
 }
 
@@ -356,7 +360,7 @@ function renderChart() {
 
   const endDate = series[series.length - 1].date;
   const startIndex = Math.max(0, series.findIndex(s => s.date >= shiftMonths(endDate, RANGE_MONTHS[currentGran][isMobile ? 'mobile' : 'desktop'])));
-  const startPercent = (startIndex / series.length) * 100;
+  const startPercent = series.length > 1 ? (startIndex / (series.length - 1)) * 100 : 0;
 
   if (!chart) chart = echarts.init($('chart-main'));
 
@@ -457,9 +461,18 @@ function renderPriceChart() {
     barMaxWidth: 6, itemStyle: { color: theme.lineRed, color0: theme.lineGreen, borderColor: theme.lineRed, borderColor0: theme.lineGreen }
   }];
 
-  if (trendVisible.high) seriesArr.push(trendSeries(TREND_NAME.high, buildExtendedTrend(agg, TREND_HIGH_KEYS), theme.lineRed));
-  if (trendVisible.low)  seriesArr.push(trendSeries(TREND_NAME.low,  buildExtendedTrend(agg, TREND_LOW_KEYS),  theme.lineBlue));
-  if (trendVisible.mix)  seriesArr.push(trendSeries(TREND_NAME.mix,  buildExtendedTrend(agg, TREND_MIX_KEYS),  theme.linePurple, true));
+  if (trendVisible.high) {
+    const d = buildExtendedTrend(agg, TREND_HIGH_KEYS);
+    if (d) seriesArr.push(trendSeries(TREND_NAME.high, d, theme.lineRed));
+  }
+  if (trendVisible.low) {
+    const d = buildExtendedTrend(agg, TREND_LOW_KEYS);
+    if (d) seriesArr.push(trendSeries(TREND_NAME.low, d, theme.lineBlue));
+  }
+  if (trendVisible.mix) {
+    const d = buildExtendedTrend(agg, TREND_MIX_KEYS);
+    if (d) seriesArr.push(trendSeries(TREND_NAME.mix, d, theme.linePurple, true));
+  }
 
   priceChart.setOption({
     backgroundColor: 'transparent', legend: { show: false },
