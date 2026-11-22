@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>牛顶监测 · 均价位置与增量资金</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%2312395f'/%3E%3Cpath d='M5 25 L12 10 L19 18 L27 5' stroke='%2338bdf8' stroke-width='2.6' fill='none'/%3E%3Ccircle cx='12' cy='10' r='2.6' fill='%2334d399'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="../common/common.css">
+<link rel="stylesheet" href="top_watch.css">
+<script src="https://fastly.jsdelivr.net/npm/echarts@5.5.1/dist/echarts.min.js"></script>
+<script src="../market/data/market_data.js"></script>
+<script src="top_watch_data.js"></script>
+</head>
+<body data-page="top_base/top_watch.html">
+<div class="app-layout">
+  <main class="main-content">
+    <div class="wrap">
+
+  <header>
+    <h1>牛顶监测</h1>
+  </header>
+
+  <div class="overall" id="overall"></div>
+
+  <!-- ===== 观察线一：均价位置 ===== -->
+  <section class="track">
+    <div class="track-head">
+      <div class="who">
+        <span class="no">01</span>
+        <div>
+          <h2>均价位置</h2>
+          <p class="q">均价离顶部区域还有多远？</p>
+        </div>
+      </div>
+      <span class="state-chip cold" id="priceChip"><i class="dot"></i>未进入顶部区</span>
+    </div>
+
+    <div class="stats" id="priceStats"></div>
+
+    <div class="chart-card card">
+      <div class="chart-head">
+        <h3>均价月线（2005 年起）</h3>
+        <span>橙点＝历史均价顶；绿线＝上轮顶高点 ×75% 门槛；蓝虚线＝MA6</span>
+      </div>
+      <div class="chart-box" id="chartAvg"></div>
+      <div class="chart-foot">
+        <span>门槛待均价站回 MA6 后，下一轮启用</span>
+      </div>
+    </div>
+
+    <div class="track-bottom">
+      <div class="table-wrap card">
+        <table>
+          <colgroup><col style="width:18%"><col style="width:22%"><col style="width:20%"><col style="width:20%"><col style="width:20%"></colgroup>
+          <thead><tr><th>轮次</th><th>顶月</th><th class="n">月内最高（元）</th><th class="n">BIAS12</th><th class="n">破 MA6 滞后</th></tr></thead>
+          <tbody id="tbAvg"></tbody>
+        </table>
+      </div>
+      <div class="rule">
+        <div class="k">怎么看</div>
+        <p><b>进入顶部区：</b>均价 ≥ 上轮顶 75% 且 BIAS12 ≥ +8%（六轮 <span class="hit">6/6</span>）。</p>
+        <p><b>跌破 MA6</b> 只说明顶已过去（滞后 0–2 个月），不是提前预警。</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== 观察线二：增量资金 ===== -->
+  <section class="track">
+    <div class="track-head">
+      <div class="who">
+        <span class="no">02</span>
+        <div>
+          <h2>增量资金</h2>
+          <p class="q">M1 和开户是否先行走弱？</p>
+        </div>
+      </div>
+      <span class="state-chip cold" id="flowChip"><i class="dot"></i>资金已退潮</span>
+    </div>
+
+    <div class="stats" id="flowStats"></div>
+
+    <div class="chart-card card">
+      <div class="chart-head">
+        <h3>近一轮三轨（2024 年起）</h3>
+        <span>黄底＝预警窗口，红底＝见顶后；开户自 2025-01 起</span>
+      </div>
+      <div class="chart-box" id="chartRecent"></div>
+      <div class="chart-foot">
+        <span id="recentFoot"></span>
+      </div>
+    </div>
+
+    <div class="track-bottom">
+      <div class="table-wrap card">
+        <table>
+          <colgroup><col style="width:24%"><col style="width:30%"><col style="width:18%"><col style="width:18%"><col style="width:10%"></colgroup>
+          <thead><tr><th>均价顶参照</th><th>M1 同比见顶</th><th>时点</th><th>开户峰值</th><th>时点</th></tr></thead>
+          <tbody id="tbFlow"></tbody>
+        </table>
+      </div>
+      <div class="rule">
+        <div class="k">怎么看</div>
+        <p><b>两项合看：</b>M1、开户至少一项提前转向，四轮 <span class="hit">4/4</span> 命中；单看一项只有 3/4。</p>
+        <p><b>不可互替：</b>2015 靠开户、2021 靠 M1，只盯一项会漏顶。</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== 口径差异 ===== -->
+  <div class="notes">
+    <h3>口径说明</h3>
+    <ul>
+      <li><b>开户：</b>历史上有三套口径（2007 新增开户数、2015 新增 A 股账户、近年沪市 A 股新开户），前两套已不再更新；本页后续统一采用沪市 A 股新开户。各期口径不同，绝对值不可比，只看转向时点。</li>
+      <li>本页为历史统计复盘，不代表未来必然重复，故不构成投资建议。</li>
+    </ul>
+  </div>
+    </div>
+  </main>
+</div>
+
+<script src="../common/common.js"></script>
+<script src="top_watch.js"></script>
+</body>
+</html>
