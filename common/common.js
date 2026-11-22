@@ -32,10 +32,21 @@
     }
   };
 
-  // 应用主题
+  // 当前主题：优先看 <html> 上的类（theme-boot.js 在 head 里已经先设好）
+  const currentTheme = () => {
+    if (document.documentElement.classList.contains('theme-light')) return 'light';
+    if (document.documentElement.classList.contains('theme-dark')) return 'dark';
+    if (document.body && document.body.classList.contains('theme-light')) return 'light';
+    return 'dark';
+  };
+
+  // 应用主题：html 与 body 同步，避免只改 body 时根变量不一致
   const applyTheme = (theme) => {
-    document.body.classList.remove('theme-light', 'theme-dark');
-    document.body.classList.add(`theme-${theme}`);
+    [document.documentElement, document.body].forEach((el) => {
+      if (!el) return;
+      el.classList.remove('theme-light', 'theme-dark');
+      el.classList.add(`theme-${theme}`);
+    });
     updateThemeBtn(theme);
     window.dispatchEvent(new CustomEvent('themeChanged', { detail: { theme } }));
   };
@@ -57,7 +68,7 @@
 
   // 手动切换主题
   const toggleTheme = () => {
-    const isLight = document.body.classList.contains('theme-light');
+    const isLight = currentTheme() === 'light';
     const newTheme = isLight ? 'dark' : 'light';
     localStorage.setItem('site-theme', newTheme);
     applyTheme(newTheme);
@@ -114,7 +125,7 @@
     layout.insertBefore(aside, layout.firstChild);
 
     // 骨架来得比 initTheme 晚，这里补一次图标
-    updateThemeBtn(document.body.classList.contains('theme-light') ? 'light' : 'dark');
+    updateThemeBtn(currentTheme());
   };
 
   const renderNav = () => {
@@ -226,13 +237,10 @@
 
   /* ================= 4. 页面初始化 ================= */
 
-  if (document.body) {
+  // 公共骨架尽早挂载：脚本放在正文末尾、数据脚本之前，解析到这里就把侧栏铺好，
+  // 避免大数据文件解析完后侧栏才出现、主内容突然右移。
+  const initCommon = () => {
     initTheme();
-  } else {
-    document.addEventListener('DOMContentLoaded', initTheme);
-  }
-
-  document.addEventListener('DOMContentLoaded', () => {
     mountSidebar();
     renderNav();
     const themeBtn = document.getElementById('themeToggle');
@@ -241,7 +249,13 @@
     }
     initSidebar();
     if (!document.querySelector('.menu-item.current')) highlightMenu();
-  });
+  };
+
+  if (document.body) {
+    initCommon();
+  } else {
+    document.addEventListener('DOMContentLoaded', initCommon, { once: true });
+  }
 
 })();
 
@@ -268,7 +282,8 @@ window.debounce = (fn, wait = 250) => {
 };
 
 window.getChartTheme = () => {
-  const isLight = document.body.classList.contains('theme-light');
+  const isLight = document.documentElement.classList.contains('theme-light')
+    || (document.body && document.body.classList.contains('theme-light'));
   return {
     isLight,
     text: isLight ? '#6b7280' : '#8ba0bd',

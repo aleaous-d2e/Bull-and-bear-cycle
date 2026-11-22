@@ -8,8 +8,9 @@
 <meta name="nav-group" content="顶底部研究">
 <meta name="nav-order" content="1">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230b1220'/%3E%3Cpath d='M6 24 L13 15 L19 19 L26 8' stroke='%2338bdf8' stroke-width='2.4' fill='none'/%3E%3C/svg%3E">
+<script>(function(){var t='dark';try{var s=localStorage.getItem('site-theme');t=(s==='light'||s==='dark')?s:((new Date().getHours()>=9&&new Date().getHours()<19)?'light':'dark')}catch(e){}document.documentElement.classList.add('theme-'+t);document.documentElement.style.colorScheme=t==='light'?'light':'dark'})();</script>
 <link rel="stylesheet" href="../common/common.css">
-<script src="https://fastly.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js"></script>
+<script src="https://npm.elemecdn.com/echarts@5.4.3/dist/echarts.min.js" defer></script>
 <style>
   *{box-sizing:border-box}
 
@@ -17,7 +18,7 @@
 
   .num{font-variant-numeric:tabular-nums}
 
-  body.theme-dark .card{box-shadow:0 12px 30px rgba(0,0,0,.5),inset 0 1px 0 rgba(255,255,255,.04)}
+  :root.theme-dark .card{box-shadow:0 12px 30px rgba(0,0,0,.5),inset 0 1px 0 rgba(255,255,255,.04)}
 
   .kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
   .kpi .k{font-size:12px;color:var(--muted);display:flex;justify-content:space-between;
@@ -63,7 +64,7 @@
   }
 </style>
 </head>
-<body class="theme-dark">
+<body>
 <div class="app-layout" id="appLayout">
 
   <main class="main-content">
@@ -124,10 +125,11 @@
   </main>
 </div>
 
-<script src="../market/market_data.js"></script>
-<script src="./two_melt_data.js"></script>
 <script src="../common/common.js"></script>
+<script src="../market/market_data.js" defer></script>
+<script src="./two_melt_data.js" defer></script>
 <script>
+document.addEventListener('DOMContentLoaded', function () {
 const fmt=(v,n=2)=>(v===null||v===undefined)?'—':v.toLocaleString('zh-CN',{minimumFractionDigits:n,maximumFractionDigits:n});
 
 let S=null, chart=null, years=1;
@@ -358,6 +360,8 @@ window.addEventListener('themeChanged',()=>{
 });
 
 render();
+}
+);
 </script>
 </body>
 </html>

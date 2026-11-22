@@ -7,8 +7,9 @@
 <title>市场顶底部研究</title>
 
 <!-- 统一使用 ECharts -->
-<script src="https://cdn.jsdelivr.net/npm/echarts@5.5.1/dist/echarts.min.js"></script>
+<script src="https://npm.elemecdn.com/echarts@5.4.3/dist/echarts.min.js" defer></script>
 
+<script>(function(){var t='dark';try{var s=localStorage.getItem('site-theme');t=(s==='light'||s==='dark')?s:((new Date().getHours()>=9&&new Date().getHours()<19)?'light':'dark')}catch(e){}document.documentElement.classList.add('theme-'+t);document.documentElement.style.colorScheme=t==='light'?'light':'dark'})();</script>
 <link rel="stylesheet" href="../common/common.css">
 <link rel="stylesheet" href="top_base.css">
 <!-- 导航：一级 nav-group / 子分组 nav-sub / 菜单项 nav-title / 排序 nav-order（可删任意一行） -->
@@ -16,7 +17,7 @@
 <meta name="nav-title" content="市场顶底部研究">
 <meta name="nav-order" content="2">
 </head>
-<body class="theme-dark">
+<body>
   <div class="app-layout">
 
     <main class="main-content">
@@ -102,9 +103,9 @@
     </main>
   </div>
 
-  <script src="top_base_data.js"></script>
   <script src="../common/common.js"></script>
-  <script src="top_base.js"></script>
+<script src="top_base_data.js" defer></script>
+    <script src="top_base.js" defer></script>
 
 </body>
 </html>

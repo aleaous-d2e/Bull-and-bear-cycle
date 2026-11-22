@@ -1,17 +1,13 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8">
   <link rel="icon" type="image/svg+xml" href="../common/favicon.svg">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>平均股价月线走势 · 全量数据与 ABC 推演</title>
-  <link rel="stylesheet" href="../common/common.css">
-  <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
-  <script>
-    if (typeof echarts === 'undefined') {
-      document.write('<script src="https://unpkg.com/echarts@5.4.3/dist/echarts.min.js"><\/script>');
-    }
-  </script>
+  <script>(function(){var t='dark';try{var s=localStorage.getItem('site-theme');t=(s==='light'||s==='dark')?s:((new Date().getHours()>=9&&new Date().getHours()<19)?'light':'dark')}catch(e){}document.documentElement.classList.add('theme-'+t);document.documentElement.style.colorScheme=t==='light'?'light':'dark'})();</script>
+<link rel="stylesheet" href="../common/common.css">
+  <script src="https://npm.elemecdn.com/echarts@5.4.3/dist/echarts.min.js" defer></script>
   <style>
     /* ---- 页面专属样式（其余全部来自 common.css） ---- */
     .page-wrap { width: 100%; max-width: var(--content-max, 1200px); margin: 0 auto; }
@@ -55,7 +51,7 @@
 <meta name="nav-title" content="平均股价推演">
 <meta name="nav-order" content="2">
 </head>
-<body class="theme-dark">
+<body>
   <!-- common.css 通过 .app-layout.collapsed 提供全屏容器 + 隐藏左侧色块 -->
   <div class="app-layout">
     <div class="main-content">
@@ -143,9 +139,9 @@
     </div>
   </div>
 
-  <script src="market_data.js"></script>
   <script src="../common/common.js"></script>
-  <script src="wave_interpretate.js"></script>
+<script src="market_data.js" defer></script>
+    <script src="wave_interpretate.js" defer></script>
   <script>
     // 绘图脚本缺失时给个说明，别留一张空白卡片
     window.addEventListener('load', () => {

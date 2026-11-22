@@ -7,9 +7,10 @@
 <title>ETF 份额变动看板</title>
 
 <!-- 直接使用 CDN，避免 document.write 引起的阻塞 -->
-<script src="https://unpkg.com/lightweight-charts@4.2.0/dist/lightweight-charts.standalone.production.js"></script>
+<script src="https://unpkg.com/lightweight-charts@4.2.0/dist/lightweight-charts.standalone.production.js" defer></script>
 
 <!-- 公共框架样式（必须最先） -->
+<script>(function(){var t='dark';try{var s=localStorage.getItem('site-theme');t=(s==='light'||s==='dark')?s:((new Date().getHours()>=9&&new Date().getHours()<19)?'light':'dark')}catch(e){}document.documentElement.classList.add('theme-'+t);document.documentElement.style.colorScheme=t==='light'?'light':'dark'})();</script>
 <link rel="stylesheet" href="../common/common.css">
 <!-- 本页样式 -->
 <link rel="stylesheet" href="etf_share.css">
@@ -18,7 +19,7 @@
 <meta name="nav-title" content="ETF 份额变动">
 <meta name="nav-order" content="1">
 </head>
-<body class="theme-dark">
+<body>
   <div class="app-layout">
 
     <!-- ================= 主内容 ================= -->
@@ -73,10 +74,9 @@
   <div id="tooltip" class="lw-tooltip"></div>
 
   <!-- 数据 → 本页逻辑 → 公共交互 -->
-  <script src="etf_share_data_broad.js"></script>
-  <script src="etf_share_data_sector.js"></script>
   <script src="../common/common.js"></script>
-  <script src="etf_share_function.js"></script>
+<script src="etf_share_data_broad.js" defer></script>
+    <script src="etf_share_function.js" defer></script>
 
 </body>
 </html>

@@ -1,9 +1,7 @@
 /* ================= 合并宽基 + 行业数据 ================= */
 window.__ETF_SHARE_DATA__ = {
-  meta:   { ...(window.__ETF_SHARE_BROAD__?.meta   || {}),
-            ...(window.__ETF_SHARE_SECTOR__?.meta  || {}) },
-  series: { ...(window.__ETF_SHARE_BROAD__?.series || {}),
-            ...(window.__ETF_SHARE_SECTOR__?.series || {}) },
+  meta:   { ...(window.__ETF_SHARE_BROAD__?.meta  || {}) },
+  series: { ...(window.__ETF_SHARE_BROAD__?.series || {}) },
 };
 
 /* ================= 分组定义 ================= */
@@ -162,10 +160,94 @@ window.__ETF_GROUPS__ = [
   let currentSortOrder = "desc";      // 默认降序
 
   let allRealDates = [];
-  GROUPS.forEach(g => g.codes.forEach(c => {
-    if (DATA.series[c]) DATA.series[c].forEach(p => allRealDates.push(p.date));
-  }));
-  allRealDates = [...new Set(allRealDates)].sort();
+  function rebuildAllDates() {
+    const dates = [];
+    GROUPS.forEach(g => g.codes.forEach(c => {
+      if (DATA.series[c]) DATA.series[c].forEach(p => dates.push(p.date));
+    }));
+    allRealDates = [...new Set(dates)].sort();
+  }
+  rebuildAllDates();
+
+  /* ---------- 行业数据按需加载 ----------
+     首屏只加载宽基数据（约 1.3MB）；点「行业」时再拉 sector 文件，
+     避免每次打开都先解析 1.1MB 暂时用不到的数据。 */
+  let sectorState = "idle";   // idle / loading / loaded / error
+  let sectorPromise = null;
+
+  function mergeSectorData() {
+    const ext = window.__ETF_SHARE_SECTOR__;
+    if (!ext || !ext.series) throw new Error("行业数据为空");
+
+    Object.assign(DATA.meta || (DATA.meta = {}), ext.meta || {});
+    Object.assign(DATA.series || (DATA.series = {}), ext.series || {});
+
+    if (DATA.meta) {
+      for (const code in DATA.meta) {
+        if (DATA.meta[code] && DATA.meta[code].name) NAME_MAP[code] = DATA.meta[code].name;
+      }
+    }
+    rebuildAllDates();
+  }
+
+  function refreshCardMeta(g, idx) {
+    const card = document.getElementById(`card-${idx}`);
+    if (!card) return;
+
+    const legend = card.querySelector(".chart-legend");
+    if (legend) {
+      legend.innerHTML = codesWithData(g).map(c => `
+        <span class="legend-item"><i style="background:${CODE_COLOR[c] || PALETTE[0]}"></i>${shortName(c)}</span>
+      `).join("");
+    }
+
+    const header = card.querySelector(".chart-header");
+    const tabs = buildTabs(g);
+    const oldTabs = card.querySelector(`#tabs-${idx}`);
+    if (tabs && tabs.length > 1) {
+      const html = `
+        <div class="group-tabs" id="tabs-${idx}">
+          ${tabs.map((tab, ti) =>
+            `<button class="tab-btn${ti === 0 ? " active" : ""}" data-tab="${ti}">${tab.label}</button>`
+          ).join("")}
+        </div>`;
+      if (oldTabs) oldTabs.outerHTML = html;
+      else if (header) header.insertAdjacentHTML("beforeend", html);
+    } else if (oldTabs) {
+      oldTabs.remove();
+    }
+  }
+
+  function loadSectorData() {
+    if (sectorState === "loaded") return Promise.resolve();
+    if (sectorState === "loading") return sectorPromise;
+
+    sectorState = "loading";
+    sectorPromise = new Promise((resolve, reject) => {
+      const s = document.createElement("script");
+      s.src = "etf_share_data_sector.js";
+      s.async = true;
+      s.onload = () => {
+        try {
+          mergeSectorData();
+          GROUPS.forEach((g, idx) => {
+            if ((g.category || "broad") === "sector") refreshCardMeta(g, idx);
+          });
+          sectorState = "loaded";
+          resolve();
+        } catch (err) {
+          sectorState = "error";
+          reject(err);
+        }
+      };
+      s.onerror = () => {
+        sectorState = "error";
+        reject(new Error("行业数据文件加载失败"));
+      };
+      document.head.appendChild(s);
+    });
+    return sectorPromise;
+  }
 
   function renderAnnouncementBoard(category) {
     const board = document.getElementById("announcement-board");
@@ -744,6 +826,52 @@ window.__ETF_GROUPS__ = [
     });
   });
 
+  function showCategory(category) {
+    currentCategory = category;
+    renderAnnouncementBoard(category);
+    renderLeaderboard(category);
+
+    document.querySelectorAll(".chart-card").forEach(card => {
+      const idx = parseInt(card.id.replace("card-", ""), 10);
+      const g = GROUPS[idx];
+
+      if (!groupHasData(g)) {
+        card.style.display = "none";
+        return;
+      }
+
+      if (card.dataset.category === category) {
+        card.style.display = "flex";
+        const isInit = chartInstances.some(ctx => ctx.groupIdx === idx);
+        if (!isInit) {
+          const ctx = createChart(`chart-${idx}`, g, idx);
+          chartInstances.push(ctx);
+        }
+      } else {
+        card.style.display = "none";
+      }
+    });
+
+    setTimeout(() => { applyMode(currentMode); }, 50);
+  }
+
+  function showSectorLoading() {
+    let tip = document.getElementById("etf-data-loading");
+    if (!tip) {
+      tip = document.createElement("div");
+      tip.id = "etf-data-loading";
+      tip.className = "empty";
+      tip.textContent = "行业数据加载中…";
+      gridEl.parentNode.insertBefore(tip, gridEl);
+    }
+    tip.style.display = "block";
+  }
+
+  function hideSectorLoading() {
+    const tip = document.getElementById("etf-data-loading");
+    if (tip) tip.remove();
+  }
+
   categoryBtns.forEach((btn) => {
     btn.addEventListener("click", () => {
       if (btn.classList.contains("active")) return;
@@ -751,48 +879,30 @@ window.__ETF_GROUPS__ = [
       btn.classList.add("active");
 
       const category = btn.dataset.category;
-      currentCategory = category;
 
-      renderAnnouncementBoard(category);
-      renderLeaderboard(category);
-
-      document.querySelectorAll(".chart-card").forEach(card => {
-        const idx = parseInt(card.id.replace("card-", ""), 10);
-        const g = GROUPS[idx];
-
-        if (!groupHasData(g)) {
-          card.style.display = "none";
-          return;
-        }
-
-        if (card.dataset.category === category) {
-          card.style.display = "flex";
-          const isInit = chartInstances.some(ctx => ctx.groupIdx === idx);
-          if (!isInit) {
-            const ctx = createChart(`chart-${idx}`, g, idx);
-            chartInstances.push(ctx);
+      if (category === "sector" && sectorState !== "loaded") {
+        showSectorLoading();
+        loadSectorData().then(() => {
+          hideSectorLoading();
+          if (currentCategory === "sector" || btn.classList.contains("active")) {
+            showCategory("sector");
           }
-        } else {
-          card.style.display = "none";
-        }
-      });
+        }).catch((err) => {
+          hideSectorLoading();
+          const tip = document.createElement("div");
+          tip.className = "empty";
+          tip.textContent = "行业数据加载失败：" + err.message;
+          gridEl.parentNode.insertBefore(tip, gridEl);
+        });
+        return;
+      }
 
-      setTimeout(() => { applyMode(currentMode); }, 50);
+      showCategory(category);
     });
   });
 
   initDOM();
-  renderAnnouncementBoard("broad");
-  renderLeaderboard("broad");
+  showCategory("broad");
 
-  GROUPS.forEach((g, idx) => {
-    const category = g.category || "broad";
-    if (category === "broad" && groupHasData(g)) {
-      const ctx = createChart(`chart-${idx}`, g, idx);
-      chartInstances.push(ctx);
-    }
-  });
-
-  applyMode("abs");
 
 })();

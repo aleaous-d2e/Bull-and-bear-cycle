@@ -29,7 +29,7 @@ body {
 }
 
 /* ---------- 2. 主题变量定义 ---------- */
-body.theme-dark {
+:root.theme-dark {
   --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
   --radius-pill: 999px;
   --bg: #0b1220;
@@ -45,7 +45,7 @@ body.theme-dark {
   --grad-body: radial-gradient(1200px 620px at 18% -12%, #16233a 0%, #0b1220 62%);
 }
 
-body.theme-light {
+:root.theme-light {
   /* 浅色主题原先漏了字体与圆角变量，导致字体回退成浏览器默认字体 */
   --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
   --radius-pill: 999px;
@@ -351,13 +351,13 @@ footer {
 }
 
 /* 卡片 / 提示栏立体阴影（深浅色自适应） */
-body.theme-light .card,
-body.theme-light .note-bar {
+:root.theme-light .card,
+:root.theme-light .note-bar {
   border-color: #ffffff;
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.08), 0 2px 8px rgba(0, 0, 0, 0.04);
 }
-body.theme-dark .card,
-body.theme-dark .note-bar {
+:root.theme-dark .card,
+:root.theme-dark .note-bar {
   border-color: rgba(255, 255, 255, 0.08);
   box-shadow: 0 12px 32px rgba(0, 0, 0, 0.6), 0 4px 12px rgba(0, 0, 0, 0.4),
               inset 0 1px 0 rgba(255, 255, 255, 0.05);
@@ -536,8 +536,8 @@ header p  { margin: 6px 0 0; font-size: 13.5px; color: var(--muted); }
 .text-down { color: #34d399 !important; }
 .text-flat { color: var(--muted) !important; }
 /* 浅色主题下加深红绿颜色，避免刺眼且增强对比 */
-body.theme-light .text-up   { color: #dc2626 !important; }
-body.theme-light .text-down { color: #059669 !important; }
+:root.theme-light .text-up   { color: #dc2626 !important; }
+:root.theme-light .text-down { color: #059669 !important; }
 
 .empty {
   display: flex;

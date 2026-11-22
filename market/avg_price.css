@@ -32,7 +32,7 @@ th, td { padding: 14px 12px; text-align: center; border-bottom: 1px solid var(--
 th { background: var(--panel-2); color: var(--muted); font-weight: 600; font-size: 12px; }
 td { color: var(--text); }
 tbody tr:hover { background: rgba(56, 189, 248, 0.04); }
-body.theme-light tbody tr:hover { background: #f9fafb; }
+:root.theme-light tbody tr:hover { background: #f9fafb; }
 td.num { font-variant-numeric: tabular-nums; }
 td.up { color: #ef4444; }
 td.down { color: #10b981; }

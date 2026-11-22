@@ -251,12 +251,12 @@
 .lw-tooltip-row b { margin-left: auto; padding-left: 12px; font-weight: 600; font-variant-numeric: tabular-nums; }
 
 /* ===== 浅色主题专属调优 ===== */
-body.theme-light .ab-tag.merge {
+:root.theme-light .ab-tag.merge {
   color: #0284c7; /* 加深青色 */
   background: rgba(56, 189, 248, 0.1);
   border-color: rgba(56, 189, 248, 0.2);
 }
-body.theme-light .ab-tag.split {
+:root.theme-light .ab-tag.split {
   color: #d97706; /* 加深黄色 */
   background: rgba(251, 191, 36, 0.1);
   border-color: rgba(251, 191, 36, 0.2);
