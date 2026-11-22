@@ -8,15 +8,15 @@
 import datetime
 import os
 import re
-import subprocess
 import sys
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 JS_NAME = "two_melt_data.js"     # 数据文件名；改名只需改这里，找不到会自动扫同目录 js
 VAR_NAME = "MARGIN_DATA"
 
-# 复用 ../common/common.py（交易日历、window 格式 JS 读写、退避重试）
-sys.path.append(os.path.join(os.path.dirname(BASE_DIR), "common"))
+# 复用 ../common（包）：交易日历、window 格式 JS 读写、退避重试
+# 直接跑 top_base/two_melt.py 时 sys.path[0] 只有 top_base，必须把项目根加进来
+sys.path.insert(0, os.path.dirname(BASE_DIR))
 import common  # noqa: E402
 
 import requests  # noqa: E402
@@ -128,34 +128,59 @@ def sse_margin(date):
 
 
 def szse_margin(date):
-    """深交所两融 → (融资余额, 融资买入额, 融券余额, 两融余额)，亿元。"""
-    import akshare as ak
+    """深交所两融 → (融资余额, 融资买入额, 融券余额, 两融余额)，亿元。
 
-    df = common.with_retry(lambda: ak.stock_margin_szse(date=date.replace("-", "")),
-                           times=SZSE_RETRY, label=f"深交所两融 {date}")
-    if df is None or df.empty:
-        return None
-    row = df[df.iloc[:, 0].astype(str).str.contains("合计|总计", na=False)]
-    row = row.iloc[0] if len(row) else df.iloc[0]
+    直接调深交所 ShowReport 接口，不经过 akshare。
+    原因：akshare 的 stock_margin_szse 在“当日无数据”时会用空 DataFrame 去赋 6 个列名，
+    触发 `Length mismatch: Expected axis has 0 elements, new values have 6 elements`，
+    然后被重试三次、刷一屏报错。这里空数据直接返回 None，交给东财兜底或跳过。
+    """
+    url = "https://www.szse.cn/api/report/ShowReport/data"
+    params = {
+        "SHOWTYPE": "JSON",
+        "CATALOGID": "1837_xxpl",
+        "txtDate": date,  # 接口接受 YYYY-MM-DD
+        "tab1PAGENO": "1",
+        "random": "0.7425245522795993",
+    }
+    headers = {
+        "Referer": "https://www.szse.cn/disclosure/margin/object/index.html",
+        "User-Agent": ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                       "AppleWebKit/537.36 (KHTML, like Gecko) "
+                       "Chrome/120.0 Safari/537.36"),
+    }
 
-    vals = []
-    for names in (("融资余额",), ("融资买入额", "融资买入金额"),
-                  ("融券余额", "融券余量金额"), ("融资融券余额",)):
-        found = None
-        for name in names:
-            for col in df.columns:
-                if name in str(col):
-                    v = row[col]
-                    if v == v:  # 非 NaN
-                        found = float(v)
-                        break
-            if found is not None:
-                break
-        if found is None:
+    def fetch():
+        resp = requests.get(url, params=params, headers=headers, timeout=20)
+        resp.raise_for_status()
+        payload = resp.json()
+        block = payload[0] if isinstance(payload, list) and payload else payload
+        data = (block or {}).get("data") or []
+        if not data:
             return None
-        # 深交所该表单位是亿元（个别版本给元），按量级判断，避免差 1e8 倍
-        vals.append(found / YI if found > 1e6 else found)
-    return tuple(vals)
+
+        row = data[0]  # {"jrrzmr":融资买入额,"jrrzye":融资余额,...,"jrrzrjye":两融余额}
+
+        def val(*keys):
+            for key in keys:
+                raw = row.get(key)
+                if raw not in (None, "", "-"):
+                    return float(str(raw).replace(",", ""))
+            return None
+
+        buy = val("jrrzmr")
+        balance = val("jrrzye")
+        short_balance = val("jrrjye")
+        total = val("jrrzrjye")
+        if None in (buy, balance, short_balance, total):
+            return None
+
+        def yi(v):
+            return v / YI if v > 1e6 else v  # 兼容个别版本给“元”
+
+        return (yi(balance), yi(buy), yi(short_balance), yi(total))
+
+    return common.with_retry(fetch, times=SZSE_RETRY, label=f"深交所两融 {date}")
 
 
 def bse_margin(date):
@@ -213,9 +238,13 @@ def build_row(date):
         if not _usable(szse_m) and snap["深"]:
             szse_m = (None, None, None, snap["深"])
 
-    # 沪深都拿到才算完整的一天；深交所当日未发布时兜底可能给 None，这里挡掉
-    if not _usable(sse_m) or not _usable(szse_m):
-        raise RuntimeError(f"{date} 沪深两融未发布（沪 {sse_m} 深 {szse_m}），跳过不写")
+    # 沪深都拿到才算完整的一天；缺一边时兜底可能给 None，这里挡掉
+    if not _usable(sse_m) and not _usable(szse_m):
+        raise RuntimeError(f"{date} 沪深两融均未更新，跳过不写")
+    if not _usable(szse_m):
+        raise RuntimeError(f"{date} 深交所两融未更新，跳过不写")
+    if not _usable(sse_m):
+        raise RuntimeError(f"{date} 上交所两融未更新，跳过不写")
 
     total = sse_m[3] + szse_m[3]
     if bse_m is not None and bse_m[3] and bse_m[3] > 0:
@@ -226,19 +255,6 @@ def build_row(date):
 # ---------------------------------------------------------------- 主流程
 
 def main():
-    # 同目录有 build_nav.py 就顺手刷新侧边栏导航（新增 html 后跑本脚本即生效）
-    for cand in (os.path.join(os.path.dirname(BASE_DIR), "common", "build_nav.py"),
-                 os.path.join(BASE_DIR, "common", "build_nav.py"),
-                 os.path.join(os.path.dirname(BASE_DIR), "build_nav.py")):
-        if os.path.isfile(cand):
-            try:
-                subprocess.run([sys.executable, cand],
-                               cwd=os.path.dirname(os.path.dirname(cand)),
-                               check=False, timeout=20)
-            except Exception as exc:
-                print(f"nav.js 未更新：{exc}")
-            break
-
     js = resolve_js()
     target = common.last_trade_date().isoformat()   # 严格早于今天 = T-1
     end, stale = peek_meta(js)

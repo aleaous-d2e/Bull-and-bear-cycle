@@ -171,9 +171,29 @@ function build(){
   for(const i of raw){ if(!ev.length||i-ev[ev.length-1]>=20) ev.push(i); }
 
   const meta=M.meta||{}, pm=MARKET_DATA.meta||{};
+
+  // 关键修复：
+  // 1) 日期不能用 market_data 的“生成时间” avg_price_updated_at，它常常是次日凌晨生成、但数据仍是前一交易日；
+  // 2) 平均股价也不能只取“两融和行情都有”的交集日期，否则两融没更新时会把股价一起拖回旧日期。
+  const mktDates=Object.keys(A).filter(d=>A[d]&&Number.isFinite(Number(A[d].price))).sort();
+  const lastMktDate=mktDates.length?mktDates[mktDates.length-1]:'';
+  const lastMktPrice=lastMktDate?Number(A[lastMktDate].price):NaN;
+  const price250=mktDates.slice(-250).map(d=>Number(A[d].price));
+  const minPrice250=price250.length?Math.min(...price250):NaN;
+
+  const marginLatest=M.rows[0]||[];
+  const lastMarginDate=marginLatest[0]||meta.end||asc[n-1][0];
+  const lastMarginBal=Number.isFinite(Number(marginLatest[1]))?Number(marginLatest[1]):bal[n-1];
+  const margin250=M.rows.slice(0,250).map(r=>Number(r[1])).filter(Number.isFinite);
+  const minMargin250=margin250.length?Math.min(...margin250):minB[n-1];
+
   S={asc,n,dates,bal,pr,minB,minP,ev,last:n-1,meta,pm,
-     dm:meta.end||asc[n-1][0],
-     dp:(pm.avg_price_updated_at||'').slice(0,10)||asc[n-1][0]};
+     dm:lastMarginDate,
+     dp:lastMktDate||asc[n-1][0],
+     lastBal:lastMarginBal,
+     lastPrice:lastMktPrice,
+     minBal250:minMargin250,
+     minPrice250:minPrice250};
   return true;
 }
 
@@ -203,10 +223,10 @@ function rgba(hex,a){
 }
 
 function kpis(){
-  const {bal,pr,minB,minP,ev,last}=S;
-  const bLow=Math.abs(bal[last]-minB[last])<1e-6;
-  const pLow=Math.abs(pr[last]-minP[last])<1e-6;
-  const gap=(pr[last]/minP[last]-1)*100;
+  const {ev,lastBal,lastPrice,minBal250,minPrice250}=S;
+  const bLow=Math.abs(lastBal-minBal250)<0.011;
+  const pLow=Math.abs(lastPrice-minPrice250)<0.011;
+  const gap=(lastPrice/minPrice250-1)*100;
   const on=bLow&&gap>2;
 
   const T=getChartTheme();
@@ -220,11 +240,11 @@ function kpis(){
     <div class="d">${pill(tag,tagColor)}${d}</div></div>`;
 
   document.getElementById('kpis').innerHTML=[
-    row('两融余额', S.dm, fmt(bal[last],0), '亿',
-        bLow?`就在 250 日最低 ${fmt(minB[last],0)}`: `距 250 日最低 +${((bal[last]/minB[last]-1)*100).toFixed(1)}%`,
+    row('两融余额', S.dm, fmt(lastBal,0), '亿',
+        bLow?`就在 250 日最低 ${fmt(minBal250,0)}`: `距 250 日最低 +${((lastBal/minBal250-1)*100).toFixed(1)}%`,
         T.lineRed, bLow&&!pLow?'新低':''),
-    row('平均股价', S.dp, fmt(pr[last],2), '元',
-        pLow?'也在 250 日最低':`已高出 250 日最低 ${gap.toFixed(1)}%`,
+    row('平均股价', S.dp, fmt(lastPrice,2), '元',
+        pLow?`也在 250 日最低 ${fmt(minPrice250,2)}`:`已高出 250 日最低 ${gap.toFixed(1)}%`,
         pLow?T.text:T.lineGreen, pLow?'新低':'未新低'),
     row('出清信号', S.dm, on?'成立':'未成立','',
         bLow?(pLow?'两边同步新低，还没到分叉':'股价已止跌，等两融再破一次低'):'两融未创新低',
