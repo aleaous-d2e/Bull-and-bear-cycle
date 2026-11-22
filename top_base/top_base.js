@@ -659,3 +659,252 @@ const INDEX_TRENDS = {
     renderChart();
   }
 })();
+
+
+/* =========================================================
+   第三部分：两融出清信号（原 two_melt.html 内联脚本并入）
+   数据仍读独立的 two_melt_data.js（window.MARGIN_DATA）与
+   ../market/market_data.js（window.MARKET_DATA），变量互不合并。
+   ========================================================= */
+(function () {
+  'use strict';
+
+  const fmt = (v, n = 2) => (v === null || v === undefined) ? '—' : v.toLocaleString('zh-CN', { minimumFractionDigits: n, maximumFractionDigits: n });
+
+  let S = null, chart = null, years = 1;
+
+  function rollingMin(arr, w) {
+    const out = new Array(arr.length).fill(null);
+    for (let i = 0; i < arr.length; i++) {
+      let m = null;
+      for (let k = Math.max(0, i - w + 1); k <= i; k++) {
+        const v = arr[k];
+        if (v !== null && v !== undefined && (m === null || v < m)) m = v;
+      }
+      out[i] = m;
+    }
+    return out;
+  }
+
+  function build() {
+    const A = window.MARKET_DATA && window.MARKET_DATA.ashare;
+    const M = window.MARGIN_DATA;
+    if (!A || !M || !Array.isArray(M.rows)) return false;
+
+    const asc = M.rows.slice().reverse()
+      .filter(r => A[r[0]] && A[r[0]].price)
+      .map(r => [r[0], r[1], A[r[0]].price]);
+
+    const n = asc.length;
+    if (n < 2) return false;
+    const dates = asc.map(r => r[0]);
+    const bal = asc.map(r => r[1]);
+    const pr = asc.map(r => r[2]);
+    const minB = rollingMin(bal, 250);
+    const minP = rollingMin(pr, 250);
+
+    const raw = [];
+    for (let i = 260; i < n; i++) {
+      if (bal[i] === null || pr[i] === null || minB[i] === null || minP[i] === null) continue;
+      if (bal[i] <= minB[i] * 1.0001 && pr[i] > minP[i] * 1.02) raw.push(i);
+    }
+    const ev = [];
+    for (const i of raw) { if (!ev.length || i - ev[ev.length - 1] >= 20) ev.push(i); }
+
+    const meta = M.meta || {}, pm = window.MARKET_DATA.meta || {};
+
+    // 关键修复：
+    // 1) 日期不能用 market_data 的“生成时间” avg_price_updated_at，它常常是次日凌晨生成、但数据仍是前一交易日；
+    // 2) 平均股价也不能只取“两融和行情都有”的交集日期，否则两融没更新时会把股价一起拖回旧日期。
+    const mktDates = Object.keys(A).filter(d => A[d] && Number.isFinite(Number(A[d].price))).sort();
+    const lastMktDate = mktDates.length ? mktDates[mktDates.length - 1] : '';
+    const lastMktPrice = lastMktDate ? Number(A[lastMktDate].price) : NaN;
+    const price250 = mktDates.slice(-250).map(d => Number(A[d].price));
+    const minPrice250 = price250.length ? Math.min(...price250) : NaN;
+
+    const marginLatest = M.rows[0] || [];
+    const lastMarginDate = marginLatest[0] || meta.end || asc[n - 1][0];
+    const lastMarginBal = Number.isFinite(Number(marginLatest[1])) ? Number(marginLatest[1]) : bal[n - 1];
+    const margin250 = M.rows.slice(0, 250).map(r => Number(r[1])).filter(Number.isFinite);
+    const minMargin250 = margin250.length ? Math.min(...margin250) : minB[n - 1];
+
+    S = { asc, n, dates, bal, pr, minB, minP, ev, last: n - 1, meta, pm,
+      dm: lastMarginDate,
+      dp: lastMktDate || asc[n - 1][0],
+      lastBal: lastMarginBal,
+      lastPrice: lastMktPrice,
+      minBal250: minMargin250,
+      minPrice250: minPrice250 };
+    return true;
+  }
+
+  function deviations() {
+    const { asc, ev, minP } = S;
+    return ev.map(i => ({ d: asc[i][0], off: asc[i][2] / minP[i] - 1 }));
+  }
+
+  function footText(full) {
+    const arr = deviations();
+    if (!arr.length) return '暂无历史触发记录';
+    const wide = arr.filter(x => x.off > 0.15);
+    const near = arr.filter(x => x.off <= 0.15);
+    if (!wide.length) {
+      const mx = Math.max(...arr.map(x => x.off)) * 100;
+      return `贴低点触发，距低点都在 ${mx.toFixed(1)}% 以内`;
+    }
+    const m = wide.reduce((a, b) => a.off > b.off ? a : b);
+    if (!full) return `${near.length} 次贴低点，${wide.length} 次离低点 15% 以上`;
+    return `${m.d} 那次触发时股价已高出低点 ${(m.off * 100).toFixed(1)}%，属反弹中途而非底部，是偏离最大的一次。`;
+  }
+
+  function rgba(hex, a) {
+    const h = hex.replace('#', '');
+    const n = parseInt(h.length === 3 ? h.split('').map(c => c + c).join('') : h, 16);
+    return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${a})`;
+  }
+
+  function kpis() {
+    const { ev, lastBal, lastPrice, minBal250, minPrice250 } = S;
+    const bLow = Math.abs(lastBal - minBal250) < 0.011;
+    const pLow = Math.abs(lastPrice - minPrice250) < 0.011;
+    const gap = (lastPrice / minPrice250 - 1) * 100;
+    const on = bLow && gap > 2;
+
+    const T = window.getChartTheme();
+    const pill = (txt, color) => txt
+      ? `<span class="pill" style="background:${rgba(color, .12)};color:${color}">${txt}</span> `
+      : '';
+
+    const row = (k, date, val, u, d, tagColor, tag) => `<div class="card kpi">
+      <div class="k"><span>${k}</span><span class="date">${date || ''}</span></div>
+      <div class="v num">${val}<small>${u}</small></div>
+      <div class="d">${pill(tag, tagColor)}${d}</div></div>`;
+
+    document.getElementById('kpis').innerHTML = [
+      row('两融余额', S.dm, fmt(lastBal, 0), '亿',
+        bLow ? `就在 250 日最低 ${fmt(minBal250, 0)}` : `距 250 日最低 +${((lastBal / minBal250 - 1) * 100).toFixed(1)}%`,
+        T.lineRed, bLow && !pLow ? '新低' : ''),
+      row('平均股价', S.dp, fmt(lastPrice, 2), '元',
+        pLow ? `也在 250 日最低 ${fmt(minPrice250, 2)}` : `已高出 250 日最低 ${gap.toFixed(1)}%`,
+        pLow ? T.text : T.lineGreen, pLow ? '新低' : '未新低'),
+      row('出清信号', S.dm, on ? '成立' : '未成立', '',
+        bLow ? (pLow ? '两边同步新低，还没到分叉' : '股价已止跌，等两融再破一次低') : '两融未创新低',
+        on ? T.lineGreen : '', on ? '可观察' : ''),
+      row('历史触发', '2010-11 起', `${ev.length}`, '次', footText(false), '', '')
+    ].join('');
+
+    document.getElementById('tb-end').textContent = '至 ' + S.dm;
+
+    const subEl = document.getElementById('sub');
+    if (subEl) subEl.textContent = on
+      ? '当前：两融在创 250 日新低，平均股价已不再新低 —— 信号成立'
+      : '破净比例、指数通道与两融出清 —— 多信号交叉确认市场位置';
+  }
+
+  function events() {
+    const { asc, ev, minP } = S;
+    document.getElementById('tbody').innerHTML = ev.map(i => {
+      const off = asc[i][2] / minP[i] - 1;
+      return `<tr><td>${asc[i][0]}</td>
+       <td class="r num">${fmt(asc[i][1], 0)}</td>
+       <td class="r num">${fmt(asc[i][2], 2)}</td>
+       <td class="r num ${off >= 0 ? 'text-up' : 'text-down'}">${off >= 0 ? '+' : ''}${(off * 100).toFixed(1)}%</td></tr>`;
+    }).join('');
+  }
+
+  function visible() {
+    if (!years) return S.asc;
+    const start = new Date(S.asc[S.last][0]);
+    start.setFullYear(start.getFullYear() - years);
+    return S.asc.filter(r => new Date(r[0]) >= start);
+  }
+
+  function draw() {
+    const T = window.getChartTheme();
+    const { ev } = S;
+    const rows = visible();
+    const dates = rows.map(r => r[0]), b = rows.map(r => r[1]), p = rows.map(r => r[2]);
+    const shown = new Set(dates);
+    const pts = [];
+    for (const i of ev) {
+      if (shown.has(S.asc[i][0])) pts.push({ coord: [S.asc[i][0], S.asc[i][1]] });
+    }
+
+    const text = { color: T.text, fontFamily: '-apple-system,"PingFang SC","Microsoft YaHei",sans-serif', fontSize: 12 };
+
+    chart.setOption({
+      backgroundColor: 'transparent',
+      animation: false,
+      grid: { left: 8, right: 8, top: 44, bottom: 26, containLabel: true },
+      legend: { data: ['两融余额（左轴·万亿）', '平均股价（右轴·元）'], top: 2, left: 0,
+        itemWidth: 16, itemHeight: 8, itemGap: 18, textStyle: { ...text, color: T.text, fontSize: 12 } },
+      tooltip: window.buildAxisTooltip(T, q => {
+        const i = dates.indexOf(q[0].axisValue);
+        return `<div style="font-weight:600;margin-bottom:4px">${q[0].axisValue}</div>
+          两融 ${fmt(b[i], 0)} 亿<br>平均股价 ${fmt(p[i], 2)} 元`;
+      }),
+      xAxis: { type: 'category', data: dates, boundaryGap: false,
+        axisLine: { lineStyle: { color: T.axis } }, axisTick: { show: false },
+        axisLabel: { ...text, color: T.text, hideOverlap: true } },
+      yAxis: [
+        { type: 'value', position: 'left', scale: true,
+          axisLine: { show: false }, axisTick: { show: false },
+          splitLine: { lineStyle: { color: T.grid } },
+          axisLabel: { ...text, color: T.text, formatter: v => (v / 10000).toFixed(1) + ' 万亿' } },
+        { type: 'value', position: 'right', scale: true,
+          axisLine: { show: false }, axisTick: { show: false }, splitLine: { show: false },
+          axisLabel: { ...text, color: T.text } }
+      ],
+      series: [
+        { name: '两融余额（左轴·万亿）', type: 'line', data: b, showSymbol: false, yAxisIndex: 0,
+          lineStyle: { color: T.lineBlue, width: 1.4 },
+          areaStyle: { color: { type: 'linear', x: 0, y: 0, x2: 0, y2: 1,
+            colorStops: [{ offset: 0, color: T.zoomFill }, { offset: 1, color: 'transparent' }] } },
+          markPoint: { silent: true, symbol: 'circle', symbolSize: 7, label: { show: false },
+            itemStyle: { color: T.lineRed, opacity: .92 }, data: pts } },
+        { name: '平均股价（右轴·元）', type: 'line', data: p, showSymbol: false, yAxisIndex: 1,
+          lineStyle: { color: T.lineYellow, width: 1.4 } }
+      ]
+    }, true);
+  }
+
+  function render() {
+    const ok = build();
+    document.getElementById('app').style.display = ok ? '' : 'none';
+    document.getElementById('empty').style.display = ok ? 'none' : '';
+    if (!ok) return;
+    kpis(); events();
+    document.getElementById('foot-note').textContent = footText(true);
+    if (window.echarts) {
+      if (!chart) {
+        chart = echarts.init(document.getElementById('chart'));
+        window.addEventListener('resize', () => chart && chart.resize());
+      }
+      draw();
+    }
+  }
+
+  const rangeEl = document.getElementById('range');
+  if (rangeEl) {
+    rangeEl.addEventListener('click', e => {
+      const btn = e.target.closest('button'); if (!btn) return;
+      years = Number(btn.dataset.y);
+      [...e.currentTarget.children].forEach(b => b.setAttribute('aria-pressed', String(b === btn)));
+      if (chart) draw();
+    });
+  }
+
+  /* common.js 切换主题后会派发 themeChanged，图表与表格配色跟着换 */
+  window.addEventListener('themeChanged', () => {
+    if (!chart) return;
+    draw();
+    events();
+    kpis();
+  });
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', render, { once: true });
+  } else {
+    render();
+  }
+})();

@@ -1,19 +1,22 @@
 # -*- coding: utf-8 -*-
 """
-top_base.py —— 整合破净数据与五大指数月K线更新（统一写入 top_base_data.js）
+top_base.py —— 整合破净数据、五大指数月K线与两融余额更新
 
 【整体架构说明】（非常重要，请看这里）：
-本脚本包含两个完全独立的数据模块，请不要混淆：
+本脚本包含三个完全独立的数据模块，请不要混淆：
   1. 每日破净模块（写入 window.RAW_DATA）：每天执行，获取全A股破净数据。
   2. 每月指数模块（写入 window.INDEX_DATA）：每月首个交易日执行，获取五大指数的月K线。
+  3. 每日两融模块（写入 window.MARGIN_DATA，独立文件 two_melt_data.js）：每天执行，
+     增量更新沪深北两融余额合计，供两融出清信号使用。
 
 运行：python top_base.py
-前置：pip install akshare pandas
+前置：pip install akshare pandas requests
 
 交易日历、JS 解析等公共部分见 common 包（common/__init__.py）；本脚本特有的“头部读取 + 字符头插”
 和“正则替换 INDEX_DATA 以保住几十 MB 的 RAW_DATA”仍留在本文件。
 """
 
+import datetime
 import json
 import os
 import re
@@ -22,6 +25,7 @@ from datetime import date, timedelta
 
 import akshare as ak
 import pandas as pd
+import requests
 
 # 直接跑 top_base/top_base.py 时，sys.path[0] 只有 top_base/，项目根不在里面，
 # 于是 import common 找不到项目根下的 common/ 包（IDE 里靠 PYTHONPATH 才碰巧能找到）。
@@ -48,6 +52,16 @@ INDICES = {
     "bj899050": "北证50"
 }
 DEFAULT_START_DATE = "20050101"  # 指数首次全量拉取时的起点
+
+# 【仅用于模块 3：每日两融】
+MARGIN_DATA_FILE = os.path.join(BASE_DIR, "two_melt_data.js")
+MARGIN_VAR = "MARGIN_DATA"
+EM_API = "https://datacenter-web.eastmoney.com/api/data/v1/get"
+EM_HEADERS = {"User-Agent": "Mozilla/5.0", "Referer": "https://data.eastmoney.com/rzrq/"}
+YI = 1e8    # 元 → 亿元
+WAN = 1e4   # 万元 → 亿元
+MARGIN_FIELDS = ["date", "两融余额"]
+SZSE_RETRY = 3   # 深交所接口偶发超时，固定重试 3 次
 
 # ============================================================
 # 通用工具函数（供两个模块共同调用）
@@ -355,6 +369,249 @@ def update_monthly_data():
 
 
 # ============================================================
+# 模块 3：每日两融余额更新（专门负责 window.MARGIN_DATA，独立 two_melt_data.js）
+# ============================================================
+def margin_resolve_js():
+    """定位两融数据文件：优先 two_melt_data.js，找不到就取同目录里第一个含 MARGIN_DATA 的 js。"""
+    exact = MARGIN_DATA_FILE
+    if os.path.exists(exact):
+        return exact
+    found = []
+    for name in sorted(os.listdir(BASE_DIR)):
+        if not name.endswith(".js"):
+            continue
+        with open(os.path.join(BASE_DIR, name), encoding="utf-8") as f:
+            head = f.read(400)
+        if MARGIN_VAR in head or "MARGIN_META" in head:
+            found.append(name)
+    if found:
+        print(f"未找到 {os.path.basename(MARGIN_DATA_FILE)}，改用同目录的 {found[0]}")
+        return os.path.join(BASE_DIR, found[0])
+    raise SystemExit(f"{BASE_DIR} 下没有任何含 {MARGIN_VAR} 的 js 文件，"
+                     f"现有 js：{[n for n in os.listdir(BASE_DIR) if n.endswith('.js')]}")
+
+
+def margin_peek_meta(path):
+    """只读文件头部取 end 与列定义，避免为了判断是否最新而通读整个 js。
+
+    老文件的 fields 里还有「上证收盘」或「融资买入额」，说明列没裁，需要重写一次。
+    """
+    if not os.path.exists(path):
+        return None, True
+    with open(path, encoding="utf-8") as f:
+        head = f.read(1200)
+    m = re.search(r'"end"\s*:\s*"(\d{4}-\d{2}-\d{2})"', head)
+    stale = ('"上证收盘"' in head) or ('"融资买入额"' in head)
+    return (m.group(1) if m else None), stale
+
+
+def margin_normalize(payload):
+    """rows 统一成两列：日期降序（最新在前）、两融余额 2 位小数、meta 同步。
+
+    老文件若是 6/7/8 列，这里顺手裁成两列。
+    """
+    rows = payload["rows"]
+    for r in rows:
+        if len(r) >= 7:                 # 六指标（含或不含指数）
+            r[:] = [r[0], r[4]]
+        elif len(r) == 3:               # 上一版的三列
+            r[:] = [r[0], r[1]]
+        elif len(r) < 2:
+            r += [None] * (2 - len(r))
+    rows.sort(key=lambda r: r[0], reverse=True)
+    for r in rows:
+        if r[1] is not None:
+            r[1] = round(float(r[1]), 2)
+    meta = payload.get("meta", {})
+    meta.update({
+        "start": rows[-1][0],
+        "end": rows[0][0],
+        "count": len(rows),
+        "fields": MARGIN_FIELDS,
+        "unit": {"两融余额": "亿元"},
+        "note": "rows 按日期降序（最新在前）；两融余额单位亿元，保留 2 位小数",
+        "built_at": datetime.datetime.now().strftime("%Y-%m-%d %H:%M"),
+    })
+    for k in ("missing_turnover", "missing_index"):
+        meta.pop(k, None)
+    payload["meta"] = meta
+    return payload
+
+
+def sse_margin(date):
+    """上交所两融 → (融资余额, 融资买入额, 融券余额, 两融余额)，亿元。"""
+    df = common.with_retry(lambda: ak.stock_margin_sse(start_date=date.replace("-", ""),
+                                                      end_date=date.replace("-", "")),
+                           times=2, label=f"上交所两融 {date}")
+    if df is None or df.empty:
+        return None
+    row = df.iloc[0]
+    return (float(row["融资余额"]) / YI, float(row["融资买入额"]) / YI,
+            float(row["融券余量金额"]) / YI, float(row["融资融券余额"]) / YI)
+
+
+def szse_margin(date):
+    """深交所两融 → (融资余额, 融资买入额, 融券余额, 两融余额)，亿元。
+
+    直接调深交所 ShowReport 接口，不经过 akshare。
+    原因：akshare 的 stock_margin_szse 在“当日无数据”时会用空 DataFrame 去赋 6 个列名，
+    触发 `Length mismatch: Expected axis has 0 elements, new values have 6 elements`，
+    然后被重试三次、刷一屏报错。这里空数据直接返回 None，交给东财兜底或跳过。
+    """
+    url = "https://www.szse.cn/api/report/ShowReport/data"
+    params = {
+        "SHOWTYPE": "JSON",
+        "CATALOGID": "1837_xxpl",
+        "txtDate": date,  # 接口接受 YYYY-MM-DD
+        "tab1PAGENO": "1",
+        "random": "0.7425245522795993",
+    }
+    headers = {
+        "Referer": "https://www.szse.cn/disclosure/margin/object/index.html",
+        "User-Agent": ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                       "AppleWebKit/537.36 (KHTML, like Gecko) "
+                       "Chrome/120.0 Safari/537.36"),
+    }
+
+    def fetch():
+        resp = requests.get(url, params=params, headers=headers, timeout=20)
+        resp.raise_for_status()
+        payload = resp.json()
+        block = payload[0] if isinstance(payload, list) and payload else payload
+        data = (block or {}).get("data") or []
+        if not data:
+            return None
+
+        row = data[0]  # {"jrrzmr":融资买入额,"jrrzye":融资余额,...,"jrrzrjye":两融余额}
+
+        def val(*keys):
+            for key in keys:
+                raw = row.get(key)
+                if raw not in (None, "", "-"):
+                    return float(str(raw).replace(",", ""))
+            return None
+
+        buy = val("jrrzmr")
+        balance = val("jrrzye")
+        short_balance = val("jrrjye")
+        total = val("jrrzrjye")
+        if None in (buy, balance, short_balance, total):
+            return None
+
+        def yi(v):
+            return v / YI if v > 1e6 else v  # 兼容个别版本给“元”
+
+        return (yi(balance), yi(buy), yi(short_balance), yi(total))
+
+    return common.with_retry(fetch, times=SZSE_RETRY, label=f"深交所两融 {date}")
+
+
+def bse_margin(date):
+    """北交所两融（万元）→ (融资余额, 融资买入额, 融券余额, 两融余额)，亿元。"""
+    df = common.with_retry(lambda: ak.stock_margin_bse(date=date.replace("-", "")),
+                           times=2, label=f"北交所两融 {date}")
+    if df is None or df.empty:
+        return None
+    row = df.iloc[-1]
+    return (float(row["融资余额"]) / WAN, float(row["融资买入额"]) / WAN,
+            float(row["融券余额"]) / WAN, float(row["融资融券余额"]) / WAN)
+
+
+def em_snapshot(date):
+    """东财单日快照（兜底）：一次拿三市两融余额。"""
+    params = {"reportName": "RPTA_RZRQ_LSDB", "columns": "ALL", "source": "WEB",
+              "pageNumber": 1, "pageSize": 1, "filter": f"(DIM_DATE='{date}')"}
+    resp = requests.get(EM_API, params=params, headers=EM_HEADERS, timeout=30)
+    data = (resp.json().get("result") or {}).get("data") or []
+    if not data:
+        return None
+    raw = data[0]
+
+    def yi(key):
+        try:
+            return float(raw[key]) / YI
+        except (TypeError, ValueError, KeyError):
+            return None
+
+    return {"沪": yi("H_RZRQYE"), "深": yi("S_RZRQYE"), "北": yi("B_RZRQYE")}
+
+
+def _margin_usable(m):
+    """某个市场的数据是否可用：四项齐全、两融余额为正。"""
+    return (m is not None and len(m) >= 4
+            and m[3] is not None and m[3] > 0)
+
+
+def build_margin_row(date):
+    """组装 [日期, 两融余额]。沪深两融的「两融余额」相加，北交所能取到也加上。"""
+    sse_m = sse_margin(date)
+    szse_m = szse_margin(date)
+    bse_m = bse_margin(date)
+
+    snap = None
+    if not _margin_usable(sse_m) or not _margin_usable(szse_m):
+        snap = em_snapshot(date)
+    if snap:
+        if not _margin_usable(sse_m) and snap["沪"]:
+            sse_m = (None, None, None, snap["沪"])
+        if not _margin_usable(szse_m) and snap["深"]:
+            szse_m = (None, None, None, snap["深"])
+
+    # 沪深都拿到才算完整的一天；缺一边时兜底可能给 None，这里挡掉
+    if not _margin_usable(sse_m) and not _margin_usable(szse_m):
+        raise RuntimeError(f"{date} 沪深两融均未更新，跳过不写")
+    if not _margin_usable(szse_m):
+        raise RuntimeError(f"{date} 深交所两融未更新，跳过不写")
+    if not _margin_usable(sse_m):
+        raise RuntimeError(f"{date} 上交所两融未更新，跳过不写")
+
+    total = sse_m[3] + szse_m[3]
+    if bse_m is not None and bse_m[3] and bse_m[3] > 0:
+        total += bse_m[3]
+    return [date, round(total, 2)]
+
+
+def update_margin_data():
+    """【模块 3 主入口】两融余额 T-1 增量更新，只维护独立的 two_melt_data.js。"""
+    print("\n--- 开始更新每日两融余额 (MARGIN_DATA) ---")
+    js = margin_resolve_js()
+    target = common.last_trade_date().isoformat()   # 严格早于今天 = T-1
+    end, stale = margin_peek_meta(js)
+    print(f"  js 里 end={end}，T-1 交易日={target}")
+
+    if end == target and not stale:                 # 已最新且列已裁好：不读全量
+        print("  已是最新，跳过拉取")
+        return
+
+    payload = common.read_js_json(js, MARGIN_VAR, default=None)
+    if payload is None or "rows" not in payload:
+        raise SystemExit(f"{os.path.basename(js)} 结构不对：需要 window.{MARGIN_VAR} = {{\"meta\":..., \"rows\":[...]}}")
+
+    rows_all = payload["rows"]
+    last = rows_all[0][0]                           # 日期降序，第一行即最新
+
+    pending = [d.isoformat() for d in common.get_trade_dates(last, target) if d.isoformat() > last]
+    print(f"  缺口 {len(pending)} 个交易日：{pending[0]} ~ {pending[-1]}" if pending else "  无缺口")
+
+    index = {r[0]: i for i, r in enumerate(rows_all)}
+    for date_str in pending:
+        try:
+            row = build_margin_row(date_str)
+        except Exception as exc:
+            print(f"  {date_str} 跳过：{type(exc).__name__} {exc}")
+            continue
+        if date_str in index:
+            rows_all[index[date_str]] = row
+        else:
+            rows_all.append(row)
+        print(f"  {date_str}：两融 {row[1]} 亿")
+
+    margin_normalize(payload)
+    common.write_js_json(js, MARGIN_VAR, payload, indent=None, newline=True, atomic=True)
+    print(f"  ✅ 已更新 {js}：{payload['meta']['count']} 行，最新 {payload['meta']['end']}")
+
+
+# ============================================================
 # 主流程调度器
 # ============================================================
 def main():
@@ -374,6 +631,12 @@ def main():
         update_daily_data()
     except Exception as e:
         print(f"❌ 每日破净数据更新失败: {e}")
+
+    # 每日必修课：更新两融余额（独立 two_melt_data.js）
+    try:
+        update_margin_data()
+    except Exception as e:
+        print(f"❌ 每日两融余额更新失败: {e}")
 
     # 每月月初大考：更新指数月K线。
     # 调度传了 AMC_MONTHLY 就按调度的结论；没传（手动单独跑本脚本）才自己判一次，

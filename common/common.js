@@ -11,13 +11,11 @@
      字段：path 相对项目根 / title 二级导航文案 / group 一级导航 / sub 子分组 / order 排序 */
   /* NAV:BEGIN */
   const NAV_PAGES = [
-    {"path":"top_base/two_melt.html","title":"两融出清信号","group":"顶底部研究","sub":"","order":1},
-    {"path":"top_base/top_base.html","title":"市场顶底部研究","group":"顶底部研究","sub":"","order":2},
+    {"path":"top_base/top_base.html","title":"市场顶底部研究","group":"顶底部研究","sub":"","order":1},
     {"path":"top_base/top_watch.html","title":"牛顶监测","group":"顶底部研究","sub":"","order":999},
     {"path":"etf/etf_share.html","title":"ETF 份额变动","group":"资金结构","sub":"","order":1},
     {"path":"etf/etf_gjd_report.html","title":"国家队行为框架","group":"资金结构","sub":"","order":2},
-    {"path":"market/avg_price.html","title":"牛熊指标","group":"市场估值","sub":"","order":1},
-    {"path":"market/wave_interpretate.html","title":"平均股价推演","group":"市场估值","sub":"","order":2}
+    {"path":"market/avg_price.html","title":"市场估值","group":"顶底部研究","sub":"","order":1}
   ];
   /* NAV:END */
 

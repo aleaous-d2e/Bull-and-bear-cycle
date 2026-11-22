@@ -47,6 +47,34 @@ td.down { color: #10b981; }
 
 .err { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; gap: 10px; color: var(--muted); font-size: 13px; text-align: center; padding: 20px; }
 
+/* ---------- 平均股价推演（原 wave_interpretate 并入） ---------- */
+.mock-notice {
+  display: none; margin-top: 12px; padding: 10px 14px; border-radius: 8px;
+  border: 1px dashed #f59e0b; background: rgba(245, 158, 11, .10);
+  color: #b45309; font-size: 12.5px; line-height: 1.6;
+}
+
+.formula-content { font-size: 13.5px; color: var(--muted); line-height: 1.8; padding: 12px 16px 16px; }
+.formula-content h3 {
+  font-size: 14.5px; color: var(--text); margin: 20px 0 10px;
+  padding-bottom: 6px; border-bottom: 1px dashed var(--line);
+}
+.formula-content h3:first-child { margin-top: 0; }
+.formula-content ul { padding-left: 20px; margin: 8px 0; }
+.formula-content li { margin-bottom: 6px; }
+.formula-content .math {
+  font-family: "SFMono-Regular", Consolas, Menlo, monospace;
+  background: var(--panel-2); padding: 2px 6px; border-radius: 4px;
+  color: var(--accent); font-weight: 600;
+}
+.formula-content .box {
+  background: var(--panel-2); border: 1px solid var(--line); border-radius: 8px;
+  padding: 12px 16px; margin: 10px 0;
+}
+.formula-content .box-title { font-weight: 700; color: var(--text); margin-bottom: 6px; }
+.formula-content .highlight { color: var(--text); font-weight: 700; text-decoration: underline; }
+.formula-content b { color: var(--text); }
+
 /* =========================================================
    移动端适配
    ========================================================= */
@@ -70,4 +98,6 @@ td.down { color: #10b981; }
   th, td { padding: 6px 3px; }
   th { font-size: 10px; }
   .tag { font-size: 9px; padding: 2px 6px; }
+
+  .formula-content { padding: 8px 10px 10px; font-size: 12.5px; }
 }

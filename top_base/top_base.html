@@ -15,7 +15,7 @@
 <!-- 导航：一级 nav-group / 子分组 nav-sub / 菜单项 nav-title / 排序 nav-order（可删任意一行） -->
 <meta name="nav-group" content="顶底部研究">
 <meta name="nav-title" content="市场顶底部研究">
-<meta name="nav-order" content="2">
+<meta name="nav-order" content="1">
 </head>
 <body>
   <div class="app-layout">
@@ -25,6 +25,7 @@
         <header>
           <div>
             <h1>市场顶底部研究</h1>
+            <p id="sub">破净比例、指数通道与两融出清 —— 多信号交叉确认市场位置</p>
           </div>
         </header>
 
@@ -75,7 +76,6 @@
           </div>
 
         </div>
-
         <!-- ================= 指标说明 ================= -->
         <div class="indicator-note">
           <h2>指标说明与使用方法</h2>
@@ -98,14 +98,67 @@
           </div>
         </div>
 
-        <footer>数据来源: AkShare · 上证指数（腾讯优先 / 新浪兜底）</footer>
+        <!-- ================= 两融出清信号（原 two_melt 并入） ================= -->
+        <section class="melt-section">
+           <div class="track-head">
+      <div class="who">
+        <span class="no">01</span>
+        <div>
+          <h2>两融出清</h2>
+          <div class="empty" id="empty" style="display:none">
+            没读到 two_melt_data.js 或 market_data.js，请把它们与本页面放在同一目录。
+          </div>
+
+          <div id="app" style="display:none">
+            <section class="kpis" id="kpis"></section>
+
+            <section class="card block">
+              <div class="ch-head">
+                <div>
+                  <h2>两融余额 vs 全市场平均股价</h2>
+                  <div class="hint">红点是历史触发：两融在创 250 日新低，平均股价已不再新低（高出 2% 以上）</div>
+                </div>
+                <div class="seg" id="range" role="group">
+                  <button data-y="1" aria-pressed="true">1 年</button>
+                  <button data-y="3" aria-pressed="false">3 年</button>
+                  <button data-y="5" aria-pressed="false">5 年</button>
+                  <button data-y="0" aria-pressed="false">全部</button>
+                </div>
+              </div>
+              <div id="chart"></div>
+              <div class="note">这只是杠杆端的出清信号，不等于底部成立——必须与其余指标综合确认。</div>
+            </section>
+
+            <section class="card block">
+              <div class="ch-head">
+                <div>
+                  <h2>历史触发 <span id="tb-end" style="font-weight:400;color:var(--muted);font-size:12px">—</span></h2>
+                  <div class="hint">只看触发当天能看到的数据，不含未来收益</div>
+                </div>
+              </div>
+              <table>
+                <thead><tr><th>触发日</th><th class="r">两融余额</th><th class="r">平均股价</th>
+                  <th class="r">股价高出 250 日低点</th></tr></thead>
+                <tbody id="tbody"></tbody>
+              </table>
+            </section>
+
+            <div class="melt-foot">
+              口径：两融取「两融余额」（沪深北合计，亿元）；新低为 250 个交易日滚动窗口，触发按 20 个交易日去重。<br>
+              <span id="foot-note"></span>
+            </div>
+          </div>
+        </section>
+        <footer>数据来源: AkShare · 上证指数（腾讯优先 / 新浪兜底） · 交易所两融（东方财富兜底）</footer>
       </div>
     </main>
   </div>
 
   <script src="../common/common.js"></script>
-<script src="top_base_data.js" defer></script>
-    <script src="top_base.js" defer></script>
+  <script src="top_base_data.js" defer></script>
+  <script src="two_melt_data.js" defer></script>
+  <script src="../market/market_data.js" defer></script>
+  <script src="top_base.js" defer></script>
 
 </body>
 </html>

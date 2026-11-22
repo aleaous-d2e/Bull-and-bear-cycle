@@ -97,3 +97,41 @@
   .indicator-note { padding: 16px; border-radius: 12px; }
   .note-grid { grid-template-columns: 1fr; gap: 10px; }
 }
+
+/* =========================================================
+   两融出清信号（原 two_melt 并入）—— 全部限定在 .melt-section 内，避免样式泄漏
+   ========================================================= */
+.melt-section { margin-top: 12px; }
+
+.melt-section .kpis { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+.melt-section .kpi .k { font-size: 12px; color: var(--muted); display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+.melt-section .kpi .k .date { font-size: 11px; opacity: .75; }
+.melt-section .kpi .v { font-size: 28px; font-weight: 700; margin-top: 9px; letter-spacing: -.03em; line-height: 1.1; color: var(--text); }
+.melt-section .kpi .v small { font-size: 12px; font-weight: 400; color: var(--muted); margin-left: 4px; }
+.melt-section .kpi .d { font-size: 12px; color: var(--muted); margin-top: 7px; line-height: 1.5; }
+.melt-section .pill { display: inline-block; font-size: 11px; padding: 2px 8px; border-radius: 999px; font-weight: 500; }
+
+.melt-section .block { margin-top: 12px; }
+.melt-section .ch-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; flex-wrap: wrap; }
+.melt-section .ch-head h2 { margin: 0; font-size: 15px; font-weight: 600; color: var(--text); }
+.melt-section .hint { font-size: 12px; color: var(--muted); margin-top: 5px; line-height: 1.6; }
+.melt-section #chart { width: 100%; height: 390px; margin-top: 4px; }
+
+.melt-section .note { margin-top: 12px; padding: 9px 12px; background: var(--accent-soft); border-left: 3px solid var(--accent); color: var(--muted); border-radius: 6px; font-size: 12px; line-height: 1.65; }
+
+.melt-section table { width: 100%; border-collapse: collapse; font-size: 13px; margin-top: 6px; }
+.melt-section thead th { font-weight: 500; font-size: 12px; color: var(--muted); text-align: left; padding: 8px 6px; border-bottom: 1px solid var(--line); }
+.melt-section thead th.r, .melt-section tbody td.r { text-align: right; }
+.melt-section tbody td { padding: 8px 6px; border-bottom: 1px solid var(--line); color: var(--muted); }
+.melt-section tbody td:first-child { color: var(--text); }
+.melt-section tbody tr:last-child td { border-bottom: 0; }
+
+.melt-section .empty { padding: 40px; height: auto; text-align: center; border-radius: 14px; background: var(--panel); border: 1px solid var(--line); font-size: 13px; color: var(--muted); margin-top: 12px; }
+
+.melt-section .melt-foot { text-align: left; color: var(--muted); font-size: 12px; line-height: 1.9; padding: 14px 0 0; }
+
+@media (max-width: 768px) {
+  .melt-section .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+  .melt-section .kpi .v { font-size: 22px; }
+  .melt-section #chart { height: 300px; }
+}

@@ -32,7 +32,7 @@ EXCLUDE_PATHS = set()                    # 按相对根的路径精确排除，�
 # ---------- 其他 ----------
 DEFAULT_GROUP = "顶底部研究"
 # 与首页板块顺序保持一致；未列出的分组排在最后
-GROUP_ORDER = ["顶底部研究", "资金结构", "市场估值"]
+GROUP_ORDER = ["顶底部研究", "资金结构"]
 BEGIN_MARK = "/* NAV:BEGIN */"
 END_MARK = "/* NAV:END */"
 
