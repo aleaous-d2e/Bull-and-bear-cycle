@@ -4,7 +4,7 @@
 <meta charset="utf-8" />
 <link rel="icon" type="image/svg+xml" href="../common/favicon.svg">
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>市场顶底部研究</title>
+<title>市场顶底研究</title>
 
 <!-- 统一使用 ECharts -->
 <script src="https://npm.elemecdn.com/echarts@5.4.3/dist/echarts.min.js" defer></script>
@@ -13,8 +13,8 @@
 <link rel="stylesheet" href="../common/common.css">
 <link rel="stylesheet" href="top_base.css">
 <!-- 导航：一级 nav-group / 子分组 nav-sub / 菜单项 nav-title / 排序 nav-order（可删任意一行） -->
-<meta name="nav-group" content="顶底部研究">
-<meta name="nav-title" content="市场顶底部研究">
+<meta name="nav-group" content="顶底研究">
+<meta name="nav-title" content="熊底监测">
 <meta name="nav-order" content="1">
 </head>
 <body>
@@ -24,7 +24,7 @@
       <div class="wrap">
         <header>
           <div>
-            <h1>市场顶底部研究</h1>
+            <h1>熊底监测</h1>
             <p id="sub">破净比例、指数通道与两融出清 —— 多信号交叉确认市场位置</p>
           </div>
         </header>
@@ -101,14 +101,16 @@
         <!-- ================= 两融出清信号（原 two_melt 并入） ================= -->
         <section class="melt-section">
            <div class="track-head">
-      <div class="who">
-        <span class="no">01</span>
-        <div>
-          <h2>两融出清</h2>
-          <div class="empty" id="empty" style="display:none">
-            没读到 two_melt_data.js 或 market_data.js，请把它们与本页面放在同一目录。
-          </div>
-
+            <div class="who">
+              <span class="no">01</span>
+              <div>
+                <h2>两融出清</h2>
+                <div class="empty" id="empty" style="display:none">
+                  没读到 two_melt_data.js 或 market_data.js，请把它们与本页面放在同一目录。
+                </div>
+              </div>
+            </div>
+           </div>
           <div id="app" style="display:none">
             <section class="kpis" id="kpis"></section>
 

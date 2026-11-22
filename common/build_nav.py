@@ -6,8 +6,7 @@
 - nav.js 里的 path 相对项目根；common.js 用脚本自身 src 反推站点根，跨目录不 404
 
 页面可选的元信息：
-    <meta name="nav-title"  content="两融出清信号">   二级导航文案（不给就用 <title> 里「·」之前）
-    <meta name="nav-group"  content="顶底部研究">     一级导航（不给就用所在目录，同目录有声明则继承）
+    <meta name="nav-group"  content="顶部研究">     一级导航（不给就用所在目录，同目录有声明则继承）
     <meta name="nav-sub"    content="市场估值">       二级导航小标题（可选）
     <meta name="nav-order"  content="2">              组内排序，小的在前
 """
@@ -30,9 +29,9 @@ EXCLUDE_NAMES = {"index.html"}           # 按文件名排除，任意层级（�
 EXCLUDE_PATHS = set()                    # 按相对根的路径精确排除，如 {"market/index.html"}
 
 # ---------- 其他 ----------
-DEFAULT_GROUP = "顶底部研究"
+DEFAULT_GROUP = "顶底研究"
 # 与首页板块顺序保持一致；未列出的分组排在最后
-GROUP_ORDER = ["顶底部研究", "资金结构"]
+GROUP_ORDER = ["顶底研究", "资金结构"]
 BEGIN_MARK = "/* NAV:BEGIN */"
 END_MARK = "/* NAV:END */"
 
