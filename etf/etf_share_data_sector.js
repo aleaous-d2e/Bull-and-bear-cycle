@@ -2795,7 +2795,10 @@ window.__ETF_SHARE_SECTOR__ = {
       },
       {
         "date": "2026-11-20",
-        "shares_yi": 120.15
+        "shares_yi": 120.15},
+      {
+        "date": "2026-11-23",
+        "shares_yi": 120.11
       }
     ],
     "159869": [
@@ -5526,6 +5529,10 @@ window.__ETF_SHARE_SECTOR__ = {
       {
         "date": "2026-11-20",
         "shares_yi": 79.34
+      },
+      {
+        "date": "2026-11-23",
+        "shares_yi": 79.78
       }
     ],
     "512710": [
@@ -11054,6 +11061,10 @@ window.__ETF_SHARE_SECTOR__ = {
       {
         "date": "2026-11-20",
         "shares_yi": 118.11
+      },
+      {
+        "date": "2026-11-23",
+        "shares_yi": 118.34
       }
     ],
     "159992": [
@@ -13780,6 +13791,10 @@ window.__ETF_SHARE_SECTOR__ = {
       {
         "date": "2026-11-20",
         "shares_yi": 183.51
+      },
+      {
+        "date": "2026-11-23",
+        "shares_yi": 181.59
       }
     ],
     "512170": [
@@ -19312,6 +19327,10 @@ window.__ETF_SHARE_SECTOR__ = {
       {
         "date": "2026-11-20",
         "shares_yi": 592.97
+      },
+      {
+        "date": "2026-11-23",
+        "shares_yi": 597.08
       }
     ],
     "159755": [
@@ -22042,6 +22061,10 @@ window.__ETF_SHARE_SECTOR__ = {
       {
         "date": "2026-11-20",
         "shares_yi": 74.24
+      },
+      {
+        "date": "2026-11-23",
+        "shares_yi": 73.43
       }
     ],
     "562500": [
@@ -30368,6 +30391,10 @@ window.__ETF_SHARE_SECTOR__ = {
       {
         "date": "2026-11-20",
         "shares_yi": 129.13
+      },
+      {
+        "date": "2026-11-23",
+        "shares_yi": 128.97
       }
     ],
     "159611": [
@@ -33102,6 +33129,10 @@ window.__ETF_SHARE_SECTOR__ = {
       {
         "date": "2026-11-20",
         "shares_yi": 78.11
+      },
+      {
+        "date": "2026-11-23",
+        "shares_yi": 78.17
       }
     ],
     "159732": [
@@ -35832,6 +35863,10 @@ window.__ETF_SHARE_SECTOR__ = {
       {
         "date": "2026-11-20",
         "shares_yi": 19.29
+      },
+      {
+        "date": "2026-11-23",
+        "shares_yi": 19.42
       }
     ],
     "159326": [
@@ -37902,6 +37937,10 @@ window.__ETF_SHARE_SECTOR__ = {
       {
         "date": "2026-11-20",
         "shares_yi": 99.54
+      },
+      {
+        "date": "2026-11-23",
+        "shares_yi": 98.91
       }
     ],
     "512400": [
@@ -51824,6 +51863,10 @@ window.__ETF_SHARE_SECTOR__ = {
       {
         "date": "2026-11-20",
         "shares_yi": 139.77
+      },
+      {
+        "date": "2026-11-23",
+        "shares_yi": 139.19
       }
     ],
     "515880": [
