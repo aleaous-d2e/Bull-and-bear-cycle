@@ -94,12 +94,6 @@ REMOVE_BROAD_CATEGORIES = {"宽基"}
 # ============================================================
 # 通用工具
 # ============================================================
-# 原来本文件里的 is_today_trading_day / get_trade_dates / last_trade_date 每次调用都要
-# 重新请求一遍 AkShare 日历（一次运行要打好几遍），现在统一走 common 包的进程内缓存。
-
-
-# 交易日判断已上移到调度；原来的 is_today_trading_day() 空壳一并删掉，需要时直接 common.is_trading_day()
-
 
 def normalize_code(v) -> str | None:
     """把输入统一成 6 位数字代码，无效返回 None。"""
