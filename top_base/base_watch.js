@@ -1,10 +1,10 @@
 /* =========================================================
-   top_base.js —— 熊底监测（本页图表逻辑）
+   base_watch.js —— 熊底监测（本页图表逻辑）
    包含两个独立图表：
      1. 破净比例与大盘指数（ECharts）
      2. 指数月线（ECharts 重构版）
    依赖：
-     - top_base_data.js       → window.RAW_DATA / window.INDEX_DATA
+     - base_watch_data.js       → window.RAW_DATA / window.INDEX_DATA
      - ECharts 5.x           → window.echarts
      - common.js             → window.getChartTheme() / themeChanged 事件
                              + window.formatDate / getWeekKey / getCssVar

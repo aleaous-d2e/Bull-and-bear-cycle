@@ -52,7 +52,7 @@ BSE_HEADERS = {
 api = DataApi(token=ZZSHARE_TOKEN) if ZZSHARE_TOKEN else DataApi()
 
 # ==================== 交易日历 ====================
-# 日历的加载与缓存全在 common 包（common/__init__.py），与 etf_share.py、top_base.py 共用同一份缓存。
+# 日历的加载与缓存全在 common 包（common/__init__.py），与 etf_share.py、base_watch.py 共用同一份缓存。
 # 原来这里还有 get_trade_dates / is_trade_date 两个只做转发的空壳，随着交易日判断上移到
 # 调度、以及 T-1 改成当天，都已经没有调用者，删掉；需要时直接调 common.xxx。
 

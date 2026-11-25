@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-top_base.py —— 整合破净数据、五大指数月K线与两融余额更新
+base_watch.py —— 整合破净数据、五大指数月K线与两融余额更新
 
 【整体架构说明】（非常重要，请看这里）：
 本脚本包含三个完全独立的数据模块，请不要混淆：
@@ -9,7 +9,7 @@ top_base.py —— 整合破净数据、五大指数月K线与两融余额更新
   3. 每日两融模块（写入 window.MARGIN_DATA，独立文件 two_melt_data.js）：每天执行，
      增量更新沪深北两融余额合计，供两融出清信号使用。
 
-运行：python top_base.py
+运行：python base_watch.py
 前置：pip install akshare pandas requests
 
 交易日历、JS 解析等公共部分见 common 包（common/__init__.py）；本脚本特有的“头部读取 + 字符头插”
@@ -27,7 +27,7 @@ import akshare as ak
 import pandas as pd
 import requests
 
-# 直接跑 top_base/top_base.py 时，sys.path[0] 只有 top_base/，项目根不在里面，
+# 直接跑 top_base/base_watch.py 时，sys.path[0] 只有 top_base/，项目根不在里面，
 # 于是 import common 找不到项目根下的 common/ 包（IDE 里靠 PYTHONPATH 才碰巧能找到）。
 # 这里显式把项目根插到最前面，不依赖 IDE 配置、也不依赖从哪个目录启动。
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -38,7 +38,7 @@ import common
 # 全局常量配置
 # ============================================================
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-DATA_FILE = os.path.join(BASE_DIR, "top_base_data.js")
+DATA_FILE = os.path.join(BASE_DIR, "base_watch_data.js")
 
 HEAD_BYTES = 8192  # 头插读取的字节数，足够覆盖前几条记录
 HEAD_ROWS = 7  # 只解析前 7 条用于去重判断

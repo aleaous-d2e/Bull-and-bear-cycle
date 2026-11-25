@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-common（包入口）—— avg_price.py / etf_share.py / top_base.py / stock_local.py 共用的小工具
+common（包入口）—— avg_price.py / etf_share.py / base_watch.py / stock_local.py 共用的小工具
 
 【布局】项目根目录下 common/ 是「包」，公共代码就直接写在本文件里。
 各子项目（market/、etf/、top_base/）的脚本写 `import common` 拿到的就是它，
@@ -103,7 +103,7 @@ def holiday_eve(today=None):
 def is_first_trading_day_of_month(day_from=1, today=None):
     """【通用】今天是否本月的第一个交易日（day_from 可要求从某号起算）。
 
-    day_from=1 → 每月的首个交易日（top_base.py 的月 K 更新闸门）；
+    day_from=1 → 每月的首个交易日（base_watch.py 的月 K 更新闸门）；
     day_from=2 → 每月 2 号及以后的首个交易日（etf_share.py 的池审查日）。
     """
     t = _as_date(today or datetime.date.today())
@@ -138,7 +138,7 @@ def read_js_json(path, var_name=None, default=None):
       避免“解析失败却当作空数据，把原文件覆盖掉”的事故）
 
     var_name=None 时按“第一个 { 到最后一个 }”截取（market_data.js 那种整文件即 JSON 的写法）；
-    指定 var_name 时从该变量后面开始截取（top_base_data.js 里 RAW_DATA 在前、INDEX_DATA 在后的写法）。
+    指定 var_name 时从该变量后面开始截取（base_watch_data.js 里 RAW_DATA 在前、INDEX_DATA 在后的写法）。
     """
     if not os.path.exists(path):
         return default
