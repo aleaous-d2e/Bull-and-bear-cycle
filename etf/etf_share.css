@@ -129,8 +129,13 @@
   border-radius: 16px;
   padding: 14px 16px;
   box-shadow: 0 8px 24px rgba(0, 0, 0, .1);
-  overflow: hidden;
+  /* 【修复】窄屏时表格按最小宽度横向滚动，而不是把文字压在一起互相重叠 */
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none;
 }
+.announcement-board::-webkit-scrollbar,
+.leaderboard-board::-webkit-scrollbar { display: none; }
 .announcement-board .ab-title,
 .leaderboard-board .ab-title {
   font-size: 13px;
@@ -141,6 +146,9 @@
   display: flex;
   align-items: center;
   gap: 6px;
+  /* 【修复】标题自身不换行：卡片变窄时只有右侧说明会整体折行，标题保持一行，不再被切成「历史拆分 / 合」+「并」 */
+  white-space: nowrap;
+  flex-wrap: wrap;
 }
 .announcement-board .ab-title::before,
 .leaderboard-board .ab-title::before {
@@ -163,6 +171,15 @@
   border-collapse: collapse;
   font-size: 11.5px;
   table-layout: fixed;
+}
+/* 【修复】列宽由 colgroup 固定，名称列只占剩余空间并省略号显示 */
+.announcement-board table { min-width: 332px; }
+.leaderboard-board table { min-width: 438px; }
+.announcement-board .cell-name,
+.leaderboard-board .cell-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .announcement-board th,
 .announcement-board td,
@@ -260,6 +277,11 @@
   color: #d97706; /* 加深黄色 */
   background: rgba(251, 191, 36, 0.1);
   border-color: rgba(251, 191, 36, 0.2);
+}
+
+/* 【修复】中等宽度（约 1024）下两张看板并排会把标题和表格挤成两行，提前改成上下堆叠 */
+@media (max-width: 1100px) {
+  .top-dashboard { grid-template-columns: minmax(0, 1fr); }
 }
 
 /* ===== H5 端：本页专用适配 ===== */

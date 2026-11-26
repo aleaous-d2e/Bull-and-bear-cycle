@@ -168,7 +168,8 @@ table.tbl { width: 100%; border-collapse: collapse; font-size: 13.6px; min-width
 /* ---------- 移动端 ---------- */
 @media (max-width: 768px) {
   .wrap { padding: 0 14px; }
-  header { padding: 38px 0 34px; }
+  /* 【修复】刊头在窄屏不再用负 margin 上提，否则「最新动态」横幅会压住刊头底部的 meta 说明文字 */
+  header { padding: 38px 0 34px; margin-bottom: 0; }
   header h1 { font-size: 24px; }
   .sub { font-size: 13.5px; }
   .meta { margin-top: 18px; gap: 8px 16px; }
