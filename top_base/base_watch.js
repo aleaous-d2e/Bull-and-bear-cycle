@@ -384,7 +384,8 @@ const INDEX_TRENDS = {
     { key: 'high', name: '高风险',   color: '#ef4444', anchors: ['2015-05', '2021-07'], pick: 'high' }
   ],
   '科创50': [
-    { key: 'low',  name: '国运支撑', color: '#38bdf8', anchors: ['2024-09', '2026-10'], pick: 'low' }
+    { key: 'low',  name: '国运支撑', color: '#38bdf8', anchors: ['2024-09', '2026-11'], pick: 'low' },
+    { key: 'mix',  name: '低估定投', color: '#a78bfa', anchors: ['2022-04', '2023-08'], pick: 'low' },
   ]
 };
 

@@ -41,6 +41,11 @@ MARKET_DATA_JS = "market_data.js"
 ZZSHARE_TOKEN = os.getenv("ZZSHARE_TOKEN", "")
 BSE_RETRY_TIMES = 2
 
+# 【修复】缺数据日是否写 is_mock 占位值，默认写（AMC_ALLOW_MOCK=0 可关）。
+# 保留占位有两点好处：曲线不断档；这些日期每次跑批都会自动重抓，源数据一恢复就覆盖成真值。
+# 前端只画真实数据，并把占位日期标成「待补」，方便人工补数。
+ALLOW_MOCK = os.getenv("AMC_ALLOW_MOCK", "1") != "0"
+
 BSE_URL = "https://www.bse.cn/marketStatController/dailyReport.do"
 BSE_HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
@@ -167,13 +172,26 @@ def run_once():
 
     # ---------- 读取现有数据并计算需要补齐的真实交易日 ----------
     data = load_market_data()
-    existing_dates = list(data.get("ashare", {}))
+    ashare = data.get("ashare", {}) or {}
+    real_keys = sorted(d for d, r in ashare.items() if not r.get("is_mock"))
 
-    # 无论是否补缺，当天必须是最新的
+    # 【修复】原来只抓「当天」和 is_mock 日期：某天漏跑（23 点那次失败 / 节假日补跑漏了），
+    # 那一行就永久缺失，页面断档也不会自愈。现在按交易日历把「库里最新真实日 → 目标日」
+    # 之间漏掉的交易日全部补上（和 base_watch 的两融缺口补齐同一套做法）。
     dates_to_fetch = {target_date}
+    if real_keys:
+        last_real = real_keys[-1]
+        if last_real < target_date:
+            gap = [d.isoformat() for d in common.get_trade_dates(last_real, target_date)
+                   if d.isoformat() > last_real]
+            if gap:
+                print(f"[补缺] {last_real} 之后缺 {len(gap)} 个交易日：{gap[0]} ~ {gap[-1]}")
+            dates_to_fetch.update(gap)
+    else:
+        print("[补缺] 库内还没有任何真实数据，本次只抓目标日")
 
     # 【修复逻辑】只要库中发现 is_mock=True 的模拟数据，就加入重跑队列强制重试
-    for d, record in data.get("ashare", {}).items():
+    for d, record in ashare.items():
         if record.get("is_mock") is True:
             dates_to_fetch.add(d)
 
@@ -199,6 +217,13 @@ def run_once():
 
         # ---------- 【修复逻辑】精细化容错处理 ----------
         if ashare_total is None or ashare_total <= 0 or avg_close is None or avg_close <= 0:
+            # 【修复】默认不写推算值：源数据没发布就跳过这一天，下一次运行会重新补抓。
+            # 这样页面宁可停在上一交易日（前端会标「T-1日」），也不会出现假数据。
+            if not ALLOW_MOCK:
+                print(f"⚠️ [跳过] {date_str} 沪深/北交所/均价有缺失，AMC_ALLOW_MOCK=0 "
+                      f"故不写占位值，等下次运行补齐")
+                continue
+
             print(f"⚠️ [警告] {date_str} 数据存在缺失，启用推断兜底...")
 
             existing_keys = sorted([k for k in data.get("ashare", {}).keys() if k < date_str])
@@ -222,7 +247,7 @@ def run_once():
                     "is_mock": True
                 }
                 data.setdefault("ashare", {})[date_str] = record
-                print(f"⚠️ [兜底] 均价抓取成功({v_mock}元)，据此推算总市值：{mv_mock}")
+                print(f"⚠️ [待补] 均价抓取成功({v_mock}元)，据此推算总市值：{mv_mock}")
                 continue
 
             # 情况 2：均价和总市值都没抓到，才使用前两日差分推算
@@ -248,7 +273,7 @@ def run_once():
                     "is_mock": True
                 }
                 data.setdefault("ashare", {})[date_str] = record
-                print(f"⚠️ [兜底] 均价与总市值均缺失，按历史差分推算：{v_mock}")
+                print(f"⚠️ [待补] 均价与总市值均缺失，按历史差分推算：{v_mock}")
                 continue
 
             elif len(existing_keys) == 1:
@@ -256,7 +281,7 @@ def run_once():
                 record = last_record.copy()
                 record["is_mock"] = True
                 data.setdefault("ashare", {})[date_str] = record
-                print(f"⚠️ [兜底] 历史数据不足，直接沿用 {existing_keys[-1]} 的数据模拟 {date_str}")
+                print(f"⚠️ [待补] 历史数据不足，直接沿用 {existing_keys[-1]} 的数据模拟 {date_str}")
                 continue
             else:
                 print(f"❌ [错误] 找不到历史数据做兜底，跳过 {date_str}。")

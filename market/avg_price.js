@@ -347,16 +347,21 @@ function insertNoteBar() {
     }
   }
 
-  // 【修复】末尾模拟值被剪掉时，明确写出页面截至哪一天，避免把推算值当成当天真实数据
-  if (mockTail.length) {
+  // 【修复】占位值（is_mock）不进图表，只在提示栏标成「待补」，并列出要补哪几天
+  // （中间的占位日也要列，否则接口断几天时看不出是哪几天缺）。
+  const pendingDays = dailySeries.filter(s => s.is_mock).map(s => s.date)
+    .concat(mockTail.map(s => s.date));
+  if (pendingDays.length) {
     const tailEl = document.getElementById('mock-tail-warning');
     if (!tailEl) {
       const warn = document.createElement('div');
       warn.id = 'mock-tail-warning';
       warn.style.cssText = 'color: #b45309; margin-top: 8px; font-weight: 500; background: rgba(245,158,11,.1); padding: 4px 8px; border-radius: 4px; display: inline-block; border: 1px solid rgba(245,158,11,.3);';
-      const lastMock = mockTail[mockTail.length - 1].date;
-      const lastReal = dailySeries[dailySeries.length - 1].date;
-      warn.textContent = '⚠️ ' + lastMock + ' 的源数据尚未发布，页面暂以 ' + lastReal + ' 为准，数据补齐后自动更新。';
+      const lastReal = dailySeries.length ? dailySeries[dailySeries.length - 1].date : '（无真实数据）';
+      const show = pendingDays.slice(-5).map(d => d.slice(5)).join('、');
+      const more = pendingDays.length > 5 ? ' 等' : '';
+      warn.textContent = '⚠️ 数据截至 ' + lastReal + '；' + pendingDays.length
+        + ' 个交易日待补（' + show + more + '），补数后自动更新。';
       noteBar.appendChild(warn);
     }
   }

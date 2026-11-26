@@ -44,10 +44,15 @@ HEAD_BYTES = 8192  # 头插读取的字节数，足够覆盖前几条记录
 HEAD_ROWS = 7  # 只解析前 7 条用于去重判断
 
 # 【仅用于模块 2：每月指数】
+# 【修复】这里的名字同时是 INDEX_DATA 里的键名，必须和前端 base_watch.js 读取的键一致
+# （前端用的是 '上证' / '深证' / '创业板' / '科创50' / '北证50'）。
+# 原来写成 '上证指数' / '深证成指' / '创业板指'，于是每次跑月度都按新键查不到旧数据：
+#   a) 当成“无历史数据”从 2005 年全量重拉，请求量暴涨；
+#   b) 合并结果写进 '上证指数' 这类孤儿键，前端读不到，月线永远停在旧月份。
 INDICES = {
-    "sh000001": "上证指数",
-    "sz399001": "深证成指",
-    "sz399006": "创业板指",
+    "sh000001": "上证",
+    "sz399001": "深证",
+    "sz399006": "创业板",
     "sh000688": "科创50",
     "bj899050": "北证50"
 }
@@ -129,6 +134,30 @@ def read_head_rows(n=HEAD_ROWS):
     return rows
 
 
+def fetch_below_net_rows(after_date=None):
+    """
+    【修复】一次把破净序列里 date > after_date 的所有行取回来（升序）。
+    原来只取接口「最新一行」，中间漏跑的日子（23 点那次失败、或某天没调度）就永久缺行，
+    破净比例曲线会缺几个点，之后也补不回来。现在按缺口批量取，天然幂等。
+    """
+    df = ak.stock_a_below_net_asset_statistics(symbol="全部A股")
+    if df is None or df.empty:
+        raise RuntimeError("AKShare 破净接口返回空数据")
+    df = df.sort_values("date")
+    rows = []
+    for _, r in df.iterrows():
+        d = str(r["date"])
+        if after_date and d <= after_date:
+            continue
+        rows.append({
+            "date": d,
+            "below": int(r["below_net_asset"]),
+            "total": int(r["total_company"]),
+            "ratio": float(r["below_net_asset_ratio"]),
+        })
+    return rows
+
+
 def fetch_below_net_latest():
     """
     【模块 1】调用 AkShare 接口，获取【全A股】的最新破净数据。
@@ -189,34 +218,41 @@ def prepend_row(row):
 def update_daily_data():
     """
     【模块 1 主入口】每日破净数据的组装逻辑。
-    1. 获取最新的破净数据（全A股）。
-    2. 去重检查：如果文件头部已经有这个日期，直接退出。
-    3. 请求当天上证指数收盘价。
-    4. 拼装成新行，头插进 window.RAW_DATA。
+    1. 取定库里最新一条 RAW_DATA 的日期，作为「已更新到哪一天」的锚点。
+    2. 从接口一次性取回该日期之后的所有破净数据（缺口补齐，见 fetch_below_net_rows）。
+    3. 逐条请求当天上证指数收盘价。
+    4. 按日期升序逐条头插进 window.RAW_DATA（最终文件里仍是最新在前）。
     """
     print("\n--- 开始更新每日破净数据 (RAW_DATA) ---")
     head_rows = read_head_rows(HEAD_ROWS)
     head_dates = [r[0] for r in head_rows] if head_rows else []
+    last_head = max(head_dates) if head_dates else None
 
-    api_data = fetch_below_net_latest()
-    print(f"  API 最新破净日期：{api_data['date']}")
-
-    # 去重判断：如果最新日期已经在前 7 条里，说明今天已经更新过了
-    if api_data["date"] in head_dates:
-        print(f"  {api_data['date']} 已存在，无需更新。")
+    # 【修复】不再只认接口「最新一行」，而是把锚点之后缺的交易日一次性补齐；
+    # 接口还没发布 T 日数据时返回空列表，这里安静跳过，等下次运行再补。
+    rows = fetch_below_net_rows(last_head)
+    if not rows:
+        print(f"  接口暂无 {last_head or '（库内为空）'} 之后的新数据（T 日可能尚未发布），本次跳过。")
         return
+    print(f"  待补 {len(rows)} 个交易日：{rows[0]['date']} ~ {rows[-1]['date']}")
 
-    # 获取当天的上证指数收盘价
-    close = fetch_index_close(api_data["date"])
-    new_row = [
-        api_data["date"],
-        api_data["below"],
-        api_data["total"],
-        close,
-        round(api_data["ratio"] * 100, 2),
-    ]
-    print(f"  新增行：{new_row}")
-    prepend_row(new_row)
+    for r in rows:
+        if r["date"] in head_dates:
+            print(f"  {r['date']} 已存在，跳过。")
+            continue
+
+        # 获取该交易日的上证指数收盘价
+        close = fetch_index_close(r["date"])
+        new_row = [
+            r["date"],
+            r["below"],
+            r["total"],
+            close,
+            round(r["ratio"] * 100, 2),
+        ]
+        print(f"  新增行：{new_row}")
+        prepend_row(new_row)
+
     print(f"  ✅ 已头插并写回 {DATA_FILE}")
 
 
@@ -351,8 +387,15 @@ def update_monthly_data():
         print("  所有指数均已是最新，无需重写文件。")
         return
 
-    # 保存：利用正则精准替换 INDEX_DATA，保留前面几十 MB 的 RAW_DATA
-    # （这正是不能直接用整文件重写的原因，序列化方式统一用 common.dump_js）
+    _save_index_data(existing_data)
+
+
+def _save_index_data(existing_data):
+    """把 INDEX_DATA 写回 base_watch_data.js（月线模块 + 当月刷新命令共用的落盘逻辑）。
+
+    保存：利用正则精准替换 INDEX_DATA，保留前面几十 MB 的 RAW_DATA
+    （这正是不能直接用整文件重写的原因，序列化方式统一用 common.dump_js）
+    """
     js_content = common.dump_js("INDEX_DATA", existing_data, indent=2)
 
     with open(DATA_FILE, "r", encoding="utf-8") as f:
@@ -366,6 +409,49 @@ def update_monthly_data():
     with open(DATA_FILE, "w", encoding="utf-8") as f:
         f.write(text)
     print(f"  ✅ 已保存更新后的 INDEX_DATA 至 {DATA_FILE}")
+
+
+def update_current_month():
+    """【新增命令】只把「当月」那根月线刷新到 T 日收盘（不全量、不补历史）。
+
+    - 只抓本月 1 号到今天的日线，重采样成一根月线；
+    - 按月覆盖写回（merge_monthly_data 以月份为主键，天然幂等，重复跑不会重复加行）；
+    - 不碰破净 / 两融 / 历史月线，几秒结束，适合月中随手跑。
+    """
+    print("\n--- 只刷新当月月线（截止 T 日） ---")
+    today = date.today()
+    month_start = today.replace(day=1).strftime("%Y%m%d")
+    today_str = today.strftime("%Y%m%d")
+
+    existing_data = load_existing_index_data()
+    updated = False
+
+    for symbol, name in INDICES.items():
+        # 本月还没交易过（比如 1 号就是周末）就跳过，避免抓到空数据
+        df = daily_from_tx(symbol, month_start, today_str)
+        source = "腾讯"
+        if df is None or df.empty:
+            df = daily_from_sina(symbol, month_start, today_str)
+            source = "新浪"
+        if df is None or df.empty:
+            print(f"  {name}: 本月暂无日线数据（今日未收盘或接口未发布），跳过。")
+            continue
+
+        new_rows = resample_monthly(df)
+        if not new_rows:
+            continue
+
+        old_rows = (existing_data.get(name) or {}).get("data", [])
+        merged_rows = merge_monthly_data(old_rows, new_rows)
+        existing_data[name] = {"code": symbol, "source": source, "data": merged_rows}
+        print(f"  ✅ {name}: 当月 {new_rows[-1][0]} 收盘 {new_rows[-1][4]:.2f}，共 {len(merged_rows)} 条月线。")
+        updated = True
+
+    if not updated:
+        print("  没有指数拿到当月数据，文件未改动。")
+        return
+
+    _save_index_data(existing_data)
 
 
 # ============================================================
@@ -576,6 +662,8 @@ def update_margin_data():
     print("\n--- 开始更新每日两融余额 (MARGIN_DATA) ---")
     js = margin_resolve_js()
     target = common.last_trade_date().isoformat()   # 严格早于今天 = T-1
+    # 【说明·非 bug】两融余额由交易所 T+1 才公布：T 日晚 23:00 跑批时目标取 T-1，
+    # 到了 T+1 晚 23:00 那次，last_trade_date() 正好是 T 日，于是这一跑就拿回 T 日的两融数据。
     end, stale = margin_peek_meta(js)
     print(f"  js 里 end={end}，T-1 交易日={target}")
 
@@ -625,6 +713,15 @@ def main():
     today = date.today()
 
     # 全局闸门（非交易日跳过）已上移到 common/central_control.py，这里不再重复判断
+
+    # 【新增命令】只把「当月」那根月线拉到 T 日收盘，不补历史、不全量、不碰破净和两融：
+    #     python3 top_base/base_watch.py --monthly-now
+    # 用途：月中想看看本月指数走到哪了，又不想等月初那一次增量跑。
+    # 说明：只对 INDICES 里这几只宽基指数各抓本月 1 号到今天的日线，重采样成月线后按月覆盖。
+    if "--monthly-now" in sys.argv:
+        print("[模式] 只刷新当月月线（截止 T 日）")
+        update_current_month()
+        return
 
     # 每日必修课：更新破净数据
     try:

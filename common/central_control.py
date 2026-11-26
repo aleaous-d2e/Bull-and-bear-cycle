@@ -43,6 +43,11 @@ TASKS = [
     ("market", "avg_price.py", "1. market：沪深总市值与平均股价（当天）"),
     ("etf", "etf_share.py", "2. etf：ETF 份额增量（含池审查）"),
     ("top_base", "base_watch.py", "3. top_base：破净比例 + 两融余额（每日）+ 指数月线（月度）"),
+    # 【修复】牛顶监测的 top_watch.py 原来根本没进这张任务表：
+    # 它内部读 market/market_data.js 生成 DERIVED_DATA（均价月线 / MA6 / 门槛），
+    # 同时维护 FLOW_DATA（M1 / 开户），不跑它这一页数据就永远停在旧日期。
+    # 月度闸门（AMC_MONTHLY）由它自己判断：非月度日只本地派生，不联网抓 M1 / 开户。
+    ("top_base", "top_watch.py", "4. top_base：牛顶监测（均价月线派生 + 增量资金）"),
 ]
 
 

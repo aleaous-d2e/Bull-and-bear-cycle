@@ -71,22 +71,20 @@ window.__ETF_GROUPS__ = [
     }
   }
 
+  // 【修复】配色改成「组内按序号取色」，并且色板扩到 6 色、两套主题都能分辨：
+  // 原来按全局 code 序号滚动取色，一组四只很可能拿到两个相近色（青 #22d3ee、蓝绿 #2dd4bf
+  // 挤在一起），图例上分不清谁是谁；而且部分颜色只在深色底上好看，浅色主题下发白。
+  // 现在这 6 色按「色相拉开 + 明度接近」挑的（蓝/琥珀/绿/红/紫/青），
+  // 在 #ffffff 与 #0b1220 两种底色下都清晰、两两可分；组内按顺序取，最多用 6 色。
   const PALETTE = [
-    "#38bdf8", "#fbbf24", "#34d399", "#fb7185",
-    "#c084fc", "#fb923c", "#a3e635", "#22d3ee",
-    "#f472b6", "#2dd4bf", "#facc15", "#818cf8",
+    "#3b82f6",  // 1 蓝
+    "#f59e0b",  // 2 琥珀
+    "#22c55e",  // 3 绿
+    "#ef4444",  // 4 红
+    "#a855f7",  // 5 紫
+    "#06b6d4",  // 6 青
   ];
 
-  const CODE_COLOR = (function () {
-    const m = {};
-    let i = 0;
-    GROUPS.forEach((g) => {
-      g.codes.forEach((c) => {
-        if (m[c] === undefined) m[c] = PALETTE[i++ % PALETTE.length];
-      });
-    });
-    return m;
-  })();
 
   const CODE_CATEGORY = (function () {
     const m = {};
@@ -98,8 +96,10 @@ window.__ETF_GROUPS__ = [
   })();
 
   function buildColorMap(group) {
+    // 【修复】严格按组内顺序取色（第 1 只蓝、第 2 只橙、第 3 只绿、第 4 只品红），
+    // 同一只在别的组里出现也不会把颜色带过来，保证「同图里四色一眼可分」。
     const m = {};
-    group.codes.forEach((c) => { m[c] = CODE_COLOR[c] || PALETTE[0]; });
+    (group.codes || []).forEach((c, i) => { m[c] = PALETTE[i % PALETTE.length]; });
     return m;
   }
 
@@ -196,8 +196,9 @@ window.__ETF_GROUPS__ = [
 
     const legend = card.querySelector(".chart-legend");
     if (legend) {
+      const cmap = buildColorMap(g);   // 【修复】图例与曲线用同一套组内配色
       legend.innerHTML = codesWithData(g).map(c => `
-        <span class="legend-item"><i style="background:${CODE_COLOR[c] || PALETTE[0]}"></i>${shortName(c)}</span>
+        <span class="legend-item"><i style="background:${cmap[c] || PALETTE[0]}"></i>${shortName(c)}</span>
       `).join("");
     }
 
@@ -288,14 +289,18 @@ window.__ETF_GROUPS__ = [
         <span class="ab-sub">（${catLabel} · 早于现有数据，直接公示）</span>
       </div>
       <table>
+        <!-- 【修复】固定列宽：名称列拿到剩余空间并做省略号，避免名称把「类型」徽标和「比例」挤到重叠 -->
+        <colgroup>
+          <col style="width:84px"><col style="width:62px"><col><col style="width:56px"><col style="width:70px">
+        </colgroup>
         <thead>
-          <tr><th>日期</th><th>代码</th><th>名称</th><th>类型</th><th>比例</th></tr>
+          <tr><th>日期</th><th>代码</th><th>名称</th><th>类型</th><th style="text-align:right">比例</th></tr>
         </thead>
         <tbody>
           ${rows.map((r) => `
             <tr>
-              <td>${r.date}</td><td>${r.code}</td><td>${r.name}</td>
-              <td><span class="ab-tag ${r.type}">${typeLabel(r)}</span></td><td>${r.ratio}</td>
+              <td>${r.date}</td><td>${r.code}</td><td class="cell-name" title="${r.name}">${r.name}</td>
+              <td><span class="ab-tag ${r.type}">${typeLabel(r)}</span></td><td style="text-align:right">${r.ratio}</td>
             </tr>`).join("")}
         </tbody>
       </table>
@@ -363,6 +368,11 @@ window.__ETF_GROUPS__ = [
         <span class="ab-sub">（点击表头排序 · 前5名）</span>
       </div>
       <table>
+        <!-- 【修复】给 7 列固定宽度：名称列吃剩余宽度并省略号显示，数字列固定且右对齐，窄屏不再互相压字 -->
+        <colgroup>
+          <col style="width:30px"><col style="width:62px"><col><col style="width:66px">
+          <col style="width:70px"><col style="width:70px"><col style="width:70px">
+        </colgroup>
         <thead>
           <tr>
             <th>#</th>
@@ -379,7 +389,7 @@ window.__ETF_GROUPS__ = [
             <tr>
               <td>${idx + 1}</td>
               <td>${item.code}</td>
-              <td>${item.name}</td>
+              <td class="cell-name" title="${item.name}">${item.name}</td>
               ${numCell(item.value)}
               ${diffCell(item.changeQuarter)}
               ${diffCell(item.changeMonth)}
@@ -409,8 +419,9 @@ window.__ETF_GROUPS__ = [
 
   function initDOM() {
     gridEl.innerHTML = GROUPS.map((g, idx) => {
+      const cmap = buildColorMap(g);   // 【修复】图例与曲线用同一套组内配色
       const legendHtml = codesWithData(g).map(c => `
-        <span class="legend-item"><i style="background:${CODE_COLOR[c] || PALETTE[0]}"></i>${shortName(c)}</span>
+        <span class="legend-item"><i style="background:${cmap[c] || PALETTE[0]}"></i>${shortName(c)}</span>
       `).join("");
 
       const tabs = buildTabs(g);

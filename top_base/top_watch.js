@@ -44,7 +44,13 @@
   var candle = months.map(function(m){return [m.open,m.close,m.low,m.high];});
   var ma6Arr = months.map(function(m){return m.ma6;});
   var gateArr = D.gate;
-  var peakData = peaks.map(function(p){ return {value:[p.month,p.high], label:{show:p.month!=='2011-03'}}; });
+  // 【修复】历史高点数字原来贴着 K 线画，常常被当月蜡烛的影线穿过、数字缺一笔；
+  // 现在抬高 distance 并加一层底色，数字压在上方单独可读。
+  var peakData = peaks.map(function(p){ return {value:[p.month,p.high], label:{
+    show:p.month!=='2011-03', position:'top', distance:8, fontSize:10,
+    backgroundColor: theme && theme.isLight ? 'rgba(255,255,255,.92)' : 'rgba(17,28,48,.9)',
+    padding:[1,3], borderRadius:3, color: theme ? theme.text : '#666'
+  }}; });
 
   var chartAvg = echarts.init(document.getElementById('chartAvg'));
   chartAvg.setOption({
@@ -88,6 +94,9 @@
       {name:'门槛水位',type:'line',silent:true,symbol:'none',z:1,
         markLine:{silent:true,symbol:'none',
           label:{show:true,position:'insideStartTop',color:'#a86315',fontSize:11,distance:6,
+            /* 【修复】门槛文字原来被虚线穿过，加一层底色让数字能看清 */
+            backgroundColor: (theme && theme.isLight) ? 'rgba(255,255,255,.92)' : 'rgba(17,28,48,.9)',
+            padding:[1,4], borderRadius:3,
             formatter:'门槛  '+fx(cur.gate,1)+' 元'},
           lineStyle:{color:'#c77a21',type:'dashed',width:1.2},
           data:[{yAxis:cur.gate}]}}

@@ -246,7 +246,8 @@ def fetch_sse_snapshot():
 def fetch_szse_snapshot(snapshot_date: date):
     """
     获取深交所指定交易日的全量份额快照。
-    snapshot_date 传 T-1 交易日，因为深交所 T 日份额数据 T+1 才定稿。
+    snapshot_date 传目标交易日（T 日）：【修复】实测深交所份额当晚 23:00 前后就已全部刷新，
+    原来按「T+1 定稿」的假设取 T-1 已经过时；当晚万一还没落库，由 run_update 的 T 日重试兜住。
     原始单位是“份”，除以 1e8 换算为“亿份”。
     """
     date_str = snapshot_date.strftime("%Y%m%d")
@@ -687,6 +688,49 @@ def run_update(snapshot_date: date, sector_map: dict[str, str] | None = None):
             series[code] = merge_series(series.get(code, []), pts)
             print(f"  {code}：本次新增 {len(pts)} 个点，合并后 {len(series[code])} 个。")
 
+    # ---- 【修复】快照日当晚的有限重试 ----
+    # 实测：上交所份额 20:00 前后就更新，深交所最晚，23:00 之后基本全部刷新；
+    # 但深交所偶尔在 23:00 那一刻还没落库，一次抓不到就等到第二天，页面白停一天。
+    # 这里只针对「快照日这一天」重试（不动历史缺口，历史缺口由 compute_missing 每天自愈），
+    # 重试次数/间隔可用 AMC_ETF_FETCH_ATTEMPTS / AMC_ETF_FETCH_WAIT(秒) 调。
+    attempt_total = max(1, int(os.getenv("AMC_ETF_FETCH_ATTEMPTS", "3")))
+    attempt_wait = max(1, int(os.getenv("AMC_ETF_FETCH_WAIT", "90")))
+    snap_str = snapshot_date.strftime("%Y-%m-%d")
+
+    def missing_on(snap: str):
+        """统计正式 + 待观察代码里，snap 这一天还没拿到份额的（按交易所分组）。"""
+        sse_out, szse_out = {}, {}
+        for code in list(target_codes) + list(watch_codes_clean):
+            dates = all_dates_broad if code in broad_codes else all_dates_sector
+            if snap not in dates:
+                continue
+            if snap in {p["date"] for p in series.get(code, []) if p.get("date")}:
+                continue
+            bucket = sse_out if exchange_of(code) == "SSE" else szse_out
+            bucket.setdefault(code, set()).add(snap)
+        return sse_out, szse_out
+
+    for attempt in range(2, attempt_total + 1):
+        sse_left, szse_left = missing_on(snap_str)
+        if not sse_left and not szse_left:
+            break
+        print(f"\n[重试 {attempt}/{attempt_total}] {snap_str} 还有 "
+              f"{len(sse_left) + len(szse_left)} 只 ETF 没拿到份额，等 {attempt_wait}s 再抓……")
+        time.sleep(attempt_wait)
+        if szse_left:
+            for code, pts in fetch_szse_batch(szse_left).items():
+                series[code] = merge_series(series.get(code, []), pts)
+                print(f"  [重试·深交所] {code} 新增 {len(pts)} 个点")
+        if sse_left:
+            for code, pts in fetch_sse_batch(sse_left).items():
+                series[code] = merge_series(series.get(code, []), pts)
+                print(f"  [重试·上交所] {code} 新增 {len(pts)} 个点")
+
+    sse_left, szse_left = missing_on(snap_str)
+    if sse_left or szse_left:
+        print(f"⚠️ {snap_str} 仍有 {len(sse_left) + len(szse_left)} 只 ETF 缺份额"
+              f"（深交所可能还没落库），次日跑批会自动补齐，不是脚本失败。")
+
     # ---- 清理孤儿数据（既不在正式列表，也不在 watch 列表）----
     keep = set(target_codes) | set(watch_codes_clean)
     for code in list(series.keys()):
@@ -716,13 +760,25 @@ def run_update(snapshot_date: date, sector_map: dict[str, str] | None = None):
 # ============================================================
 def main():
 
-    # 交易日判断已上移到 common/central_control.py：非交易日不会调用本脚本
-    # 两个交易所的份额数据都是 T+1 定稿，统一取最近一个已定稿交易日。
-    # 调度从 08:00 挪到 22:00 也不改变这一点：当天份额当晚还没出来，
-    # 所以这里仍取 T-1（其余脚本的数据 22:00 后已发布，取当天即可）。
-    # common.last_trade_date() 的语义就是“严格早于今天的最近一个交易日”，正好是 T-1。
-    snapshot_date = common.last_trade_date()
-    print(f"快照日（T-1）：{snapshot_date}")
+    # 交易日判断已上移到 common/central_control.py：非交易日不会调用本脚本。
+    # 【修复】快照日取 T 日（当天），不再固定取 T-1：
+    # 实测上交所份额 20:00 前后就更新、深交所最晚，23:00 之后两只所都已刷新，
+    # 原来「两个交易所都是 T+1 定稿」的假设不成立，取 T-1 会让页面白停一天。
+    # 当晚个别代码深交所还没落库时，run_update 里的 T 日重试会再抓两轮；
+    # 仍拿不到的，次日跑批按缺失日期自动补齐（compute_missing 本来就按交易日历补）。
+    today_str = os.environ.get("AMC_TODAY") or date.today().isoformat()
+    today_date = date.fromisoformat(today_str)
+    if common.is_trading_day(today_date):
+        snapshot_date = today_date
+        print(f"快照日（T 日）：{snapshot_date}")
+    else:
+        # 手工加 --force 复盘时今天不是交易日，退回最近一个交易日
+        snapshot_date = common.last_trade_date()
+        print(f"快照日（今天非交易日，取最近交易日）：{snapshot_date}")
+
+    # 池审查仍按「已定稿」的最近交易日算：审查要一次拿到全市场规模，
+    # 而审查日（每月 2 号）的份额当晚可能还没刷全，用最近已定稿日更稳。
+    review_date = common.last_trade_date()
 
     # 池审查：每月 2 号（非交易日顺延至下一交易日）
     # 审查日直接将筛出的行业主题列表传给阶段 2，不再经过 CSV 中转。
@@ -731,7 +787,7 @@ def main():
     sector_map = None
     if is_review_day():
         try:
-            sector_map = run_review(snapshot_date)
+            sector_map = run_review(review_date)
         except Exception as e:
             print(f"[警告] 审查失败：{type(e).__name__}: {e}，本次沿用上次结果继续增量更新。")
 

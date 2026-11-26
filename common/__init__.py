@@ -130,6 +130,38 @@ def dump_js(var_name, data, indent=None):
     return "window." + var_name + " = " + body + ";"
 
 
+def _slice_json_object(text, start):
+    """【修复】从 start 处的 '{' 起，按括号配平截出一个完整 JSON 对象。
+
+    原来 read_js_json 用 text.rfind('}') 一路截到文件最后一个 '}'：
+    只要文件里有第二个变量（例如 top_watch_data.js 里 FLOW_DATA 后面还跟着 DERIVED_DATA），
+    就会把后面的对象一起吞进来，json.loads 报 "Extra data"。
+    这里改成扫描配平（跳过字符串内部的括号），保证只取当前这个对象。
+    """
+    depth = 0
+    in_str = False
+    esc = False
+    for i in range(start, len(text)):
+        ch = text[i]
+        if in_str:
+            if esc:
+                esc = False
+            elif ch == "\\":
+                esc = True
+            elif ch == '"':
+                in_str = False
+            continue
+        if ch == '"':
+            in_str = True
+        elif ch == "{":
+            depth += 1
+        elif ch == "}":
+            depth -= 1
+            if depth == 0:
+                return text[start:i + 1]
+    raise ValueError("无法在文件中找到配平的 JSON 对象")
+
+
 def read_js_json(path, var_name=None, default=None):
     """读取 `window.XXX = {...};` 格式文件并解析出 JSON。
 
@@ -155,11 +187,8 @@ def read_js_json(path, var_name=None, default=None):
 
     if start < 0:
         raise ValueError(f"无法在 {path} 中定位 JSON")
-    end = text.rfind("}")
-    if end <= start:
-        raise ValueError(f"无法在 {path} 中定位 JSON")
-
-    return json.loads(text[start:end + 1])
+    # 【修复】按括号配平截取当前对象，避免把文件里后面的第二个变量也吞进来
+    return json.loads(_slice_json_object(text, start))
 
 
 def write_js_json(path, var_name, data, indent=None, newline=True, atomic=True):

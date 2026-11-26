@@ -6,8 +6,10 @@ top_watch.py —— 牛顶监测统一取数与派生脚本（合并原 fetch_fl
   1. 增量资金（window.FLOW_DATA）：M1 同比、月开户、四轮顶部资金转向参照。
      月度闸门（AMC_MONTHLY=1 或 --fetch）才联网抓 akshare；非月度只保留已有历史、
      用内置种子补缺，不清空接口历史。开户接口仅更新到 2023-08，2025-01 起为人工复核种子。
-  2. 均价派生（window.DERIVED_DATA）：读 market/data/market_data.js 日频均价，
+  2. 均价派生（window.DERIVED_DATA）：读 market/market_data.js 日频均价，
      聚合月线 OHLC，派生 MA6 / MA12 / BIAS12 / 滚动 75% 门槛阶梯 / 六轮均价顶；本模块不联网。
+     【修复】这里原来指向 market/data/market_data.js（多了一层 data/），实际文件在 market/ 下，
+     路径错了就 SystemExit，等于这一页永远不更新。
 
 两份数据统一写入同目录 top_watch_data.js。
 公共工具（交易日历 / JS 读写 / 退避重试）见 common 包。
@@ -23,7 +25,12 @@ sys.path.insert(0, ROOT_DIR)
 import common  # noqa: E402
 
 DATA_FILE = os.path.join(BASE_DIR, "top_watch_data.js")
-MARKET_JS = os.path.join(ROOT_DIR, "market", "data", "market_data.js")
+# 【修复】原来写的是 market/data/market_data.js —— 仓库里并没有 market/data/ 这一层，
+# 真实文件是 market/market_data.js。路径错了的后果是 build_derived() 读不到 ashare，
+# 直接 SystemExit，脚本一跑就失败，于是也一直没人把它放进调度表（top_watch_data.js 长期停在旧日期）。
+MARKET_JS = os.path.join(ROOT_DIR, "market", "market_data.js")
+# 兼容旧路径：万一以后有人把文件挪回 market/data/，这里还能兜住一次
+LEGACY_MARKET_JS = os.path.join(ROOT_DIR, "market", "data", "market_data.js")
 
 # ---- 种子：接口缺口月份的人工复核值（只比转向时点，绝对值口径见页面备注） ----
 # M1 同比 %，2024-01 起（实抓成功的月份会被覆盖）
@@ -176,6 +183,10 @@ def monthly_ohlc(ashare):
     """日频 -> 月线：open=首交易日开盘，close=末交易日收盘，high/low=月内极值。"""
     months = {}
     for date, row in sorted(ashare.items()):
+        # 【修复】跳过 is_mock 的推算值：那种行是当日源数据没发布时的兜底假数据，
+        # 混进月线会把月收盘价带偏（11-26 那条假数据曾让月收盘变成 19.26）。
+        if row.get("is_mock") is True:
+            continue
         ym = date[:7]
         price = row.get("price")
         m = months.setdefault(ym, {
@@ -211,7 +222,9 @@ def sma(values, n):
 
 
 def build_derived():
-    market = common.read_js_json(MARKET_JS, "MARKET_DATA", default={})
+    # 【修复】优先读 market/market_data.js，读不到再退回旧的 market/data/ 路径
+    market_js = MARKET_JS if os.path.exists(MARKET_JS) else LEGACY_MARKET_JS
+    market = common.read_js_json(market_js, "MARKET_DATA", default={})
     ashare = market.get("ashare", {})
     if not ashare:
         raise SystemExit("market_data.js 缺少 ashare 日频数据")
