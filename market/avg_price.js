@@ -249,6 +249,8 @@ function aggregateSeries(daily, gran) {
    4. 状态 & 变量
    ============================================================ */
 let chart = null, seriesIndex = new Map(), dailySeries = [];
+// 【修复】末尾被剪掉的模拟值（当日源数据尚未发布时由 fallback 生成），只用于提示，不参与 KPI/图表
+let mockTail = [];
 const seriesCache = { week: null, month: null };
 let currentGran = 'day';
 let priceChart = null, priceAgg = null;
@@ -269,11 +271,20 @@ function renderKPI() {
   const last = dailySeries[dailySeries.length - 1];
   const prev = dailySeries[dailySeries.length - 2] || last;
 
-  $('kpi-mv-date').textContent = 'T-1日：' + last.date;
+  // 【修复】调度已改成「交易日当晚更新当日数据」，落库的最新一条就是 T 日；
+  // 只有数据滞后（例如源站未发布）时才回退成 T-1 日，标签跟着数据日期走，不再写死 T-1/T-2。
+  const todayStr = (() => {
+    const d = new Date();
+    const mm = String(d.getMonth() + 1).padStart(2, '0');
+    const dd = String(d.getDate()).padStart(2, '0');
+    return d.getFullYear() + '-' + mm + '-' + dd;
+  })();
+  const isToday = last.date === todayStr;
+  $('kpi-mv-date').textContent = (isToday ? 'T日：' : 'T-1日：') + last.date;
   $('kpi-mv').innerHTML = (last.mv / 10000).toFixed(2) + '<small>万亿</small>';
 
   const chg = (last.mv / prev.mv - 1) * 100;
-  setDelta($('kpi-mv-d'), '较T-2日 ', chg);
+  setDelta($('kpi-mv-d'), (isToday ? '较T-1日 ' : '较T-2日 '), chg);
 
   const yearNow = GDP_LATEST_YEAR, yearBase = yearNow - 1;
   $('kpi-gdp-label').textContent = 'GDP（' + yearNow + '）';
@@ -335,21 +346,61 @@ function insertNoteBar() {
       noteBar.appendChild(warn);
     }
   }
+
+  // 【修复】末尾模拟值被剪掉时，明确写出页面截至哪一天，避免把推算值当成当天真实数据
+  if (mockTail.length) {
+    const tailEl = document.getElementById('mock-tail-warning');
+    if (!tailEl) {
+      const warn = document.createElement('div');
+      warn.id = 'mock-tail-warning';
+      warn.style.cssText = 'color: #b45309; margin-top: 8px; font-weight: 500; background: rgba(245,158,11,.1); padding: 4px 8px; border-radius: 4px; display: inline-block; border: 1px solid rgba(245,158,11,.3);';
+      const lastMock = mockTail[mockTail.length - 1].date;
+      const lastReal = dailySeries[dailySeries.length - 1].date;
+      warn.textContent = '⚠️ ' + lastMock + ' 的源数据尚未发布，页面暂以 ' + lastReal + ' 为准，数据补齐后自动更新。';
+      noteBar.appendChild(warn);
+    }
+  }
 }
 
 /* ============================================================
    6. 主图
    ============================================================ */
 function getValuationMarks(theme) {
+  const isMobile = window.innerWidth <= 720;
+  // 【修复】三条阈值线原本都挤在右侧同一位置（insideEndTop），
+  // 标签互相压住、还被平均股价折线穿过看不清。
+  // 现在：危险在上方、偏高在下方、低估在上方，右侧同一端上下错开；
+  // 标签加底色 + markLine 抬高 z（见 renderChart），压在折线之上不糊字。
+  const chip = {
+    backgroundColor: theme.isLight ? 'rgba(255,255,255,.94)' : 'rgba(11,18,32,.9)',
+    padding: isMobile ? [0, 3] : [1, 4],
+    borderRadius: 3,
+    fontSize: isMobile ? 9 : 10,
+    fontWeight: 600,
+  };
   return [
-    { y: 0.890, label: '0.890 危险', color: theme.isLight ? '#f97316' : '#fb923c' },
-    { y: 0.799, label: '0.799 偏高', color: theme.isLight ? '#eab308' : '#facc15' },
-    { y: 0.590, label: '0.590 低估', color: theme.isLight ? '#3b82f6' : '#38bdf8' }
-  ].map(m => ({
-    yAxis: m.y,
-    lineStyle: { color: m.color, type: 'dashed', width: 1 },
-    label: { formatter: m.label, color: m.color, fontWeight: 600, position: 'insideEndTop' }
-  }));
+    { y: 0.890, label: '0.890 危险', color: theme.isLight ? '#f97316' : '#fb923c', position: 'insideEndTop' },
+    // 0.799 这条阈值在像素上和「价格=20 元」重合，右端放标签必然被平均股价折线压住，
+    // 所以单独挪到左端起点，并左对齐，避免压到左侧 Y 轴刻度文字。
+    { y: 0.799, label: '0.799 偏高', color: theme.isLight ? '#eab308' : '#facc15', position: 'insideStartTop', align: 'left', hideLabelOnMobile: true },
+    { y: 0.590, label: '0.590 低估', color: theme.isLight ? '#3b82f6' : '#38bdf8', position: 'insideEndTop' }
+  ].map(m => {
+    const label = Object.assign({}, chip, {
+      formatter: m.label,
+      color: m.color,
+      position: m.position,
+      distance: 6,
+    });
+    if (m.align) label.align = m.align;   // 只有 0.799 需要显式左对齐，其余沿用默认
+    // 手机窄屏下左侧 Y 轴刻度（0.9 / 0.6）离图内很近，0.799 的标签会压到刻度文字，
+    // 所以窄屏只保留同名虚线、不显示文字标签，数值仍可在 tooltip 里看到。
+    if (isMobile && m.hideLabelOnMobile) label.show = false;
+    return {
+      yAxis: m.y,
+      lineStyle: { color: m.color, type: 'dashed', width: 1 },
+      label,
+    };
+  });
 }
 
 function renderChart() {
@@ -411,7 +462,7 @@ function renderChart() {
         name: '市值/GDP', type: 'line', yAxisIndex: 0, data: series.map(s => +s.ratio.toFixed(4)),
         smooth: true, symbol: 'none', sampling: 'lttb', lineStyle: { width: isMobile ? 1.5 : 2, color: theme.lineBlue },
         areaStyle: { color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [{ offset: 0, color: theme.isLight ? 'rgba(37,99,235,.15)' : 'rgba(56,189,248,.25)' }, { offset: 1, color: 'rgba(0,0,0,0)' }]) },
-        markLine: { silent: true, symbol: 'none', label: { position: 'insideEndTop', fontSize: isMobile ? 9 : 11 }, data: getValuationMarks(theme) }
+        markLine: { silent: true, symbol: 'none', z: 10, label: { fontSize: isMobile ? 9 : 10 }, data: getValuationMarks(theme) }
       },
       {
         name: '平均股价(元)', type: 'line', yAxisIndex: 1, data: series.map(s => s.price),
@@ -538,6 +589,13 @@ window.addEventListener('themeChanged', () => { if (chart) renderChart(); if (pr
   if (!data || !data.ashare) { showError(new Error('market_data.js 缺失或为空')); return; }
 
   dailySeries = buildSeries(data.ashare);
+  // 【修复】数据末尾如果是 is_mock 的推算值（例如当天收盘数据还没发布），
+  // 之前的做法会把它当成「T 日」写进 KPI 和图线，看起来像当天暴跌。
+  // 现在把末尾连续的模拟值剪掉，KPI/图表只画真实数据，并在提示栏说明截至哪一天。
+  mockTail = [];
+  while (dailySeries.length && dailySeries[dailySeries.length - 1].is_mock) {
+    mockTail.unshift(dailySeries.pop());
+  }
   if (!dailySeries.length) { showError(new Error('无有效数据')); return; }
 
   insertNoteBar();
