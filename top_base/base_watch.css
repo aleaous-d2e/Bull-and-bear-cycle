@@ -67,6 +67,12 @@
 .legend-item i[data-color="blue"]   { background: var(--chart-blue); }
 .legend-item i[data-color="red"]    { background: var(--chart-red); }
 .legend-item i[data-color="purple"] { background: var(--chart-purple); }
+/* 【修复】K线与「高位风险」原来都是同一个红点，图例分辨不出含义；
+   改成红绿双色块，表示 K 线本身包含涨跌两种颜色。 */
+.legend-item i[data-color="candle"] {
+  background: linear-gradient(90deg, var(--chart-red) 0 50%, #34d399 50% 100%);
+  border-radius: 2px;
+}
 
 /* 指标说明 */
 .indicator-note {
