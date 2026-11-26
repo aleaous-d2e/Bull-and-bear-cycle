@@ -8,8 +8,9 @@
 <link rel="stylesheet" href="../common/common.css">
 <link rel="stylesheet" href="top_watch.css">
 <script src="https://fastly.jsdelivr.net/npm/echarts@5.5.1/dist/echarts.min.js"></script>
-<script src="../market/data/market_data.js"></script>
 <script src="top_watch_data.js"></script>
+<!-- 【修复】原来这里引用了 ../market/data/market_data.js（多了一层 data/，线上 404），
+     本页图表只用 DERIVED_DATA / FLOW_DATA，并不依赖 market_data.js，直接去掉这个无效引用。 -->
 </head>
 <body data-page="top_base/top_watch.html">
 <div class="app-layout">
