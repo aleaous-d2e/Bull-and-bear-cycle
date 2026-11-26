@@ -12,7 +12,7 @@
   /* NAV:BEGIN */
   const NAV_PAGES = [
     {"path":"top_base/base_watch.html","title":"熊底监测","group":"顶底研究","sub":"","order":1},
-    {"path":"market/avg_price.html","title":"阿巴阿中","group":"顶底研究","sub":"","order":1},
+    {"path":"market/avg_price.html","title":"阿巴阿钟","group":"顶底研究","sub":"","order":1},
     {"path":"top_base/top_watch.html","title":"牛顶监测","group":"顶底研究","sub":"","order":999},
     {"path":"etf/etf_share.html","title":"ETF 份额变动","group":"资金结构","sub":"","order":1},
     {"path":"etf/etf_gjd_report.html","title":"国家队行为框架","group":"资金结构","sub":"","order":2}
