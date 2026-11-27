@@ -37,9 +37,9 @@
   }).join('');
 
   /* ---------- 图一：月K + MA6 + 门槛 ---------- */
-  var theme = window.getChartTheme ? window.getChartTheme() : null;
-  theme = theme || { text:'#666', grid:'#eee', axis:'#ddd', tooltipBg:'#fff', tooltipBorder:'#ddd', tooltipText:'#13242d', crossLabelBg:'#999', lineRed:'#dc2626', lineGreen:'#059669', lineBlue:'#2f6f86' };
-  var upColor = theme?theme.lineRed:'#dc2626', downColor = theme?theme.lineGreen:'#059669';
+  // 主题色板统一来自 common.js（同一页面已先加载，不再保留本地兜底对象）
+  var theme = window.getChartTheme();
+  var upColor = theme.lineRed, downColor = theme.lineGreen;
   var dates = months.map(function(m){return m.month;});
   var candle = months.map(function(m){return [m.open,m.close,m.low,m.high];});
   var ma6Arr = months.map(function(m){return m.ma6;});
@@ -57,12 +57,12 @@
     backgroundColor:'transparent',animationDuration:600,
     grid:{left:56,right:30,top:40,bottom:48},
     tooltip:{trigger:'axis',confine:true,
-      backgroundColor:theme?theme.tooltipBg:'#fff',borderColor:theme?theme.tooltipBorder:'#ddd',
-      textStyle:{color:theme?theme.tooltipText:'#13242d',fontSize:12},padding:[10,14],
-      axisPointer:{type:'cross',label:{backgroundColor:theme?theme.crossLabelBg:'#999',color:'#fff'}},
+      backgroundColor:theme.tooltipBg,borderColor:theme.tooltipBorder,
+      textStyle:{color:theme.tooltipText,fontSize:12},padding:[10,14],
+      axisPointer:{type:'cross',label:{backgroundColor:theme.crossLabelBg,color:'#fff'}},
       formatter:function(ps){
         var i=ps[0].dataIndex, m=months[i];
-        var s='<div style="font-weight:600;font-size:13px;color:'+(theme?theme.tooltipText:'#13242d')+';margin-bottom:4px">'+m.month+'</div>';
+        var s='<div style="font-weight:600;font-size:13px;color:'+(theme.tooltipText)+';margin-bottom:4px">'+m.month+'</div>';
         var closeColor = m.close>=m.open?upColor:downColor;
         s+='<div style="font-size:12px;line-height:1.75">开 <b>'+fx(m.open,2)+'</b>　高 <b>'+fx(m.high,2)+'</b>　低 <b>'+fx(m.low,2)+'</b>　收 <b style="color:'+closeColor+'">'+fx(m.close,2)+'</b></div>';
         var biasColor = (m.bias12||0)>=0?upColor:downColor;
@@ -70,24 +70,24 @@
         return s;
       }},
     xAxis:{type:'category',data:dates,boundaryGap:true,
-      axisLine:{lineStyle:{color:theme?theme.axis:'#ddd'}},axisTick:{show:false},
-      axisLabel:{color:theme?theme.text:'#666',fontSize:11,margin:14,
+      axisLine:{lineStyle:{color:theme.axis}},axisTick:{show:false},
+      axisLabel:{color:theme.text,fontSize:11,margin:14,
         formatter:function(v){return v.slice(0,4);},
         interval:function(i,v){return v.slice(5)==='01'&&parseInt(v.slice(0,4),10)%2===0;}},
       splitLine:{show:false}},
     yAxis:{type:'value',min:4,axisLine:{show:false},axisTick:{show:false},
-      axisLabel:{color:theme?theme.text:'#666',fontSize:11,margin:12},
-      splitLine:{lineStyle:{color:theme?theme.grid:'#eee',type:'dashed',width:1}}},
+      axisLabel:{color:theme.text,fontSize:11,margin:12},
+      splitLine:{lineStyle:{color:theme.grid,type:'dashed',width:1}}},
     series:[
       {name:'均价月K',type:'candlestick',data:candle,z:2,
         itemStyle:{color:upColor,color0:downColor,borderColor:upColor,borderColor0:downColor}},
       {name:'75% 门槛',type:'line',data:gateArr,showSymbol:false,connectNulls:false,z:1,
-        lineStyle:{width:2.2,color:theme?theme.lineGreen:'#2f7662'},
+        lineStyle:{width:2.2,color:theme.lineGreen},
         areaStyle:{color:'rgba(16,185,129,.06)',origin:'start'}},
       {name:'月线 MA6',type:'line',data:ma6Arr,showSymbol:false,z:3,
-        lineStyle:{width:1.3,color:theme?theme.lineBlue:'#2f6f86',type:'dotted',opacity:.9}},
+        lineStyle:{width:1.3,color:theme.lineBlue,type:'dotted',opacity:.9}},
       {name:'历史均价顶',type:'scatter',z:4,silent:true,symbolSize:9,
-        itemStyle:{color:'#c77a21',borderColor:theme?theme.tooltipBg:'#fff',borderWidth:1.6},
+        itemStyle:{color:'#c77a21',borderColor:theme.tooltipBg,borderWidth:1.6},
         label:{position:'top',distance:9,color:'#9a5f12',fontSize:11,fontWeight:600,
           formatter:function(p){return p.value[1].toFixed(2);}},
         data:peakData},
@@ -127,14 +127,14 @@
   document.getElementById('recentFoot').textContent =
     (m1Peak?m1Peak.month+' M1 见顶':'')+(accPeak?' · '+accPeak.month+' 开户峰值':'')+' · '+peaks[peaks.length-1].month+' 均价顶';
 
-  var ax={type:'category',data:rMonths,boundaryGap:true,axisLine:{lineStyle:{color:theme?theme.axis:'#ddd'}},axisTick:{show:false},
+  var ax={type:'category',data:rMonths,boundaryGap:true,axisLine:{lineStyle:{color:theme.axis}},axisTick:{show:false},
     axisLabel:{show:false},splitLine:{show:false}};
   function bands(){ return {silent:true,data:[
     [{xAxis:'2025-09',itemStyle:{color:'rgba(245,158,11,.10)'}},{xAxis:'2026-05'}],
     [{xAxis:'2026-06',itemStyle:{color:'rgba(239,68,68,.08)'}},{xAxis:rMonths[rMonths.length-1]}]]}; }
   function vlines(){ var pts=[{xAxis:'2025-09'},{xAxis:accPeak?accPeak.month:null},{xAxis:peaks[peaks.length-1].month}]
     .filter(function(p){return p.xAxis;});
-    return {silent:true,symbol:'none',lineStyle:{color:theme?theme.axis:'#999',type:'dashed',width:1},data:pts}; }
+    return {silent:true,symbol:'none',lineStyle:{color:theme.axis,type:'dashed',width:1},data:pts}; }
 
   var chartRecent = echarts.init(document.getElementById('chartRecent'));
   chartRecent.setOption({
@@ -151,17 +151,17 @@
     xAxis:[
       Object.assign({},ax,{gridIndex:0}),
       Object.assign({},ax,{gridIndex:1}),
-      Object.assign({},ax,{gridIndex:2,axisLabel:{show:true,color:theme?theme.text:'#7A7A7A',fontSize:11,
+      Object.assign({},ax,{gridIndex:2,axisLabel:{show:true,color:theme.text,fontSize:11,
         interval:function(i,v){return /-(01|04|07|10)$/.test(v);}}})
     ],
     yAxis:[
-      {gridIndex:0,min:12,max:36,splitNumber:4,axisLabel:{color:theme?theme.text:'#7A7A7A',fontSize:11},
-       axisLine:{show:false},axisTick:{show:false},splitLine:{lineStyle:{color:theme?theme.grid:'#eee',type:'dashed'}},
-       name:'元',nameTextStyle:{color:theme?theme.text:"#9A9A9A",fontSize:11},nameGap:8},
-      {gridIndex:1,min:-5,max:9.2,splitNumber:3,axisLabel:{color:theme?theme.text:'#7A7A7A',fontSize:11,formatter:'{value}%'},
-       axisLine:{show:false},axisTick:{show:false},splitLine:{lineStyle:{color:theme?theme.grid:'#eee',type:'dashed'}}},
-      {gridIndex:2,min:0,max:575,splitNumber:3,axisLabel:{color:theme?theme.text:'#7A7A7A',fontSize:11},
-       axisLine:{show:false},axisTick:{show:false},splitLine:{lineStyle:{color:theme?theme.grid:'#eee',type:'dashed'}}}
+      {gridIndex:0,min:12,max:36,splitNumber:4,axisLabel:{color:theme.text,fontSize:11},
+       axisLine:{show:false},axisTick:{show:false},splitLine:{lineStyle:{color:theme.grid,type:'dashed'}},
+       name:'元',nameTextStyle:{color:theme.text,fontSize:11},nameGap:8},
+      {gridIndex:1,min:-5,max:9.2,splitNumber:3,axisLabel:{color:theme.text,fontSize:11,formatter:'{value}%'},
+       axisLine:{show:false},axisTick:{show:false},splitLine:{lineStyle:{color:theme.grid,type:'dashed'}}},
+      {gridIndex:2,min:0,max:575,splitNumber:3,axisLabel:{color:theme.text,fontSize:11},
+       axisLine:{show:false},axisTick:{show:false},splitLine:{lineStyle:{color:theme.grid,type:'dashed'}}}
     ],
     series:[
       {name:'平均股价',type:'line',xAxisIndex:0,yAxisIndex:0,data:rClose,
@@ -169,7 +169,7 @@
         areaStyle:{color:'rgba(138,90,122,0.08)'},markArea:bands(),markLine:vlines()},
       {name:'M1 同比',type:'bar',xAxisIndex:1,yAxisIndex:1,data:rM1,barWidth:'62%',
         itemStyle:{color:function(p){return p.value>=0?upColor:downColor;},opacity:.86},markArea:bands(),
-        markLine:{silent:true,symbol:'none',data:[{yAxis:0,lineStyle:{color:theme?theme.axis:'#999',width:1}}]}},
+        markLine:{silent:true,symbol:'none',data:[{yAxis:0,lineStyle:{color:theme.axis,width:1}}]}},
       {name:'月开户',type:'bar',xAxisIndex:2,yAxisIndex:2,data:rAcc,barWidth:'58%',
         itemStyle:{color:function(p){return (p.value||0)>=250?'#3A6EA5':'#A8BDD2';},opacity:.9},
         markArea:bands(),markLine:vlines()}

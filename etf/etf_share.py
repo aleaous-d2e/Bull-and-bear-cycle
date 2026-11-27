@@ -26,7 +26,9 @@ import akshare as ak
 import pandas as pd
 import requests
 import json
+import io
 import os
+import random
 import sys
 import time
 from datetime import date, timedelta
@@ -62,8 +64,10 @@ WATCH_CODES = [
 BROAD_JS = "etf_share_data_broad.js"
 SECTOR_JS = "etf_share_data_sector.js"
 
-# 日期范围：END_DATE 取今天，避免未来日期进入交易日造成无效请求
-END_DATE = date.today()
+# 日期范围：【方案A】跑批统一到「T+1 早上 08:06」，所以日历截至「最近一个已收盘的交易日」。
+# 早上跑时它正好是 T 日（昨天），既保证能拿到当天份额，也不会把还没收盘的今天算进缺口里反复空抓；
+# 当天 21:00 后手动补跑则取今天。
+END_DATE = common.data_target_date(evening_hour=21)
 # 宽基查询近 6 年，行业主题获取近 3 年
 BROAD_START_DATE = date(END_DATE.year - 6, END_DATE.month, END_DATE.day)
 SECTOR_START_DATE = date(END_DATE.year - 3, END_DATE.month, END_DATE.day)
@@ -71,6 +75,24 @@ SECTOR_START_DATE = date(END_DATE.year - 3, END_DATE.month, END_DATE.day)
 # 自行限速防IP被封
 SLEEP_PER_REQUEST = 0.15         # 上交所单日份额接口
 SLEEP_PER_NAME_REQUEST = 0.1     # 上交所扩位简称批量接口
+
+# 抓取重试：【方案A】早上 08:06 跑时数据早已落库，重试只为兜接口抖动，默认 3 次、间隔 10s
+# （这个节奏线上一直很稳）。次数/间隔可用 AMC_ETF_FETCH_ATTEMPTS / AMC_ETF_FETCH_WAIT(秒) 调。
+FETCH_ATTEMPTS = max(1, int(os.getenv("AMC_ETF_FETCH_ATTEMPTS", "3")))
+FETCH_WAIT = max(1, int(os.getenv("AMC_ETF_FETCH_WAIT", "10")))
+
+# 深交所份额接口：akshare 的 fund_scale_daily_szse 内部固定 10s 读超时，
+# 而该接口返回整表 xlsx、实测单日要 25~35s，必然 ReadTimeout（份额因此长期停在 T-1）。
+# 这里直接按同一个接口自己请求，把读超时放宽到 90s，清洗口径与 akshare 保持一致。
+SZSE_URL = "https://www.szse.cn/api/report/ShowReport"
+SZSE_HEADERS = {
+    "Referer": "https://www.szse.cn/market/fund/volume/etf/index.html",
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+                  "(KHTML, like Gecko) Chrome/132.0.0.0 Safari/537.36",
+}
+# 读超时 90s 不是重试间隔：该接口单日全量实测 30s 左右，压到 10s 会次次 ReadTimeout，
+# 所以这里必须远大于 30s；可用 AMC_SZSE_TIMEOUT 调大（深交所高峰期更慢）。
+SZSE_TIMEOUT = max(10, int(os.getenv("AMC_SZSE_TIMEOUT", "90")))
 
 # ============================================================
 # ETF池审查配置
@@ -110,6 +132,48 @@ def exchange_of(code: str) -> str:
     if code.startswith("1"):
         return "SZSE"
     raise ValueError(f"无法根据代码 {code} 判断交易所，请检查输入。")
+
+
+def fetch_szse_xlsx(start_date: date, end_date: date) -> pd.DataFrame:
+    """按深交所官方 xlsx 接口取基金规模日频数据。
+
+    返回列：日期(date) / 基金代码(6 位 str) / 基金简称 / 基金份额(float，单位：份)。
+    等价于 ak.fund_scale_daily_szse(start, end, "ETF")，区别只是读超时放宽到 SZSE_TIMEOUT。
+    """
+    resp = requests.get(
+        SZSE_URL,
+        params={
+            "SHOWTYPE": "xlsx",
+            "CATALOGID": "scsj_fund_jjgm",
+            "TABKEY": "tab1",
+            "txtStart": start_date.strftime("%Y-%m-%d"),
+            "txtEnd": end_date.strftime("%Y-%m-%d"),
+            "jjlb": "ETF",
+            "random": str(random.random()),
+        },
+        headers=SZSE_HEADERS,
+        timeout=SZSE_TIMEOUT,
+    )
+    resp.raise_for_status()
+
+    df = pd.read_excel(io.BytesIO(resp.content), engine="openpyxl").dropna(how="all")
+    cols = ["日期", "基金代码", "基金简称", "基金份额"]
+    if df.empty:
+        return pd.DataFrame(columns=cols)
+
+    df = df.rename(columns={"基金规模(份)": "基金份额"})
+    if "基金代码" in df.columns:
+        code_num = pd.to_numeric(df["基金代码"], errors="coerce")
+        df = df[code_num.notna()].copy()
+        df["基金代码"] = code_num[code_num.notna()].astype(int).astype(str).str.zfill(6)
+    if "日期" in df.columns:
+        df["日期"] = pd.to_datetime(df["日期"], errors="coerce").dt.date
+        df = df[df["日期"].notna()]
+    if "基金份额" in df.columns:
+        s = df["基金份额"].astype(str).str.replace(",", "", regex=False)
+        df["基金份额"] = pd.to_numeric(s, errors="coerce")
+
+    return df[cols] if not df.empty else pd.DataFrame(columns=cols)
 
 
 def is_review_day() -> bool:
@@ -243,17 +307,27 @@ def fetch_sse_snapshot():
     return df[["基金代码", "场内简称", "份额_亿份"]]
 
 
+def szse_frame(start_date: date, end_date: date):
+    """深交所区间份额，统一成 日期 / 基金代码 / 场内简称 / 份额_亿份（原始“份”→亿份）。
+
+    快照（阶段 1）和增量（阶段 2）原来各自写了一遍“列改名 + 除以 1e8”，
+    合并到这里，免得两处口径走偏。
+    """
+    df = fetch_szse_xlsx(start_date, end_date)
+    df = df.rename(columns={"基金简称": "场内简称", "基金份额": "份额_原始"})
+    df["份额_亿份"] = pd.to_numeric(df["份额_原始"], errors="coerce") / 1e8
+    return df
+
+
 def fetch_szse_snapshot(snapshot_date: date):
     """
     获取深交所指定交易日的全量份额快照。
-    snapshot_date 传目标交易日（T 日）：【修复】实测深交所份额当晚 23:00 前后就已全部刷新，
-    原来按「T+1 定稿」的假设取 T-1 已经过时；当晚万一还没落库，由 run_update 的 T 日重试兜住。
+    snapshot_date 传目标交易日（T 日）：深交所份额当晚陆续落库，T+1 早上一定齐全；
+    原来取 T-1 是因为当晚抓不到，而当晚抓不到的真正原因是 akshare 内部固定 10s 读超时
+    （该接口返回整表 xlsx、单日要 30s 左右），现在改直连接口、读超时 90s，一次就能拿到 T 日。
     原始单位是“份”，除以 1e8 换算为“亿份”。
     """
-    date_str = snapshot_date.strftime("%Y%m%d")
-    df = ak.fund_scale_daily_szse(start_date=date_str, end_date=date_str, symbol="ETF")
-    df = df.rename(columns={"基金简称": "场内简称", "基金份额": "份额_原始"})
-    df["份额_亿份"] = pd.to_numeric(df["份额_原始"], errors="coerce") / 1e8
+    df = szse_frame(snapshot_date, snapshot_date)
     return df[["基金代码", "场内简称", "份额_亿份"]]
 
 
@@ -478,6 +552,23 @@ def compute_missing(existing_pts: list, all_dates: list[str]) -> set[str]:
     return {d for d in all_dates if d > last}
 
 
+def retry_fixed(fn, times=FETCH_ATTEMPTS, wait=FETCH_WAIT, label=""):
+    """固定间隔重试（3 次 × 10 秒），抓不到返回 None。
+
+    与 common.with_retry 的“1s、2s、4s 翻倍”是两种节奏：份额接口只是慢/抖，
+    均匀间隔更合适；两处批量抓取共用这一份，不再各写一遍 try/except。
+    """
+    for i in range(times):
+        try:
+            return fn()
+        except Exception as e:
+            print(f"  [{label}] 第 {i + 1}/{times} 次失败: {type(e).__name__}: {e}")
+            if i < times - 1:
+                time.sleep(wait)
+    print(f"  [{label}] {times} 次都没成功，本次跳过")
+    return None
+
+
 def fetch_sse_batch(code_dates: dict[str, set[str]]) -> dict[str, list[dict]]:
     """SSE：每个缺失交易日只请求一次，服务当天所有缺失的 SSE 代码。"""
     results: dict[str, list[dict]] = {c: [] for c in code_dates}
@@ -486,10 +577,8 @@ def fetch_sse_batch(code_dates: dict[str, set[str]]) -> dict[str, list[dict]]:
         return results
 
     for d_str in all_dates:
-        try:
-            df = ak.fund_etf_scale_sse(date=d_str.replace("-", ""))
-        except Exception:
-            df = None
+        df = retry_fixed(lambda d=d_str: ak.fund_etf_scale_sse(date=d.replace("-", "")),
+                         label=f"上交所 {d_str}")
         if df is not None and not df.empty and "基金代码" in df.columns:
             sub = df.copy()
             sub["_code"] = sub["基金代码"].astype(str).str.strip().str.zfill(6)
@@ -510,7 +599,7 @@ def fetch_sse_batch(code_dates: dict[str, set[str]]) -> dict[str, list[dict]]:
 
 
 def fetch_szse_batch(code_dates: dict[str, set[str]]) -> dict[str, list[dict]]:
-    """SZSE：使用 akshare 官方接口，但加上重试和详细报错。"""
+    """SZSE：直连交易所 xlsx 接口（读超时 90s），按分段抓取 + 统一重试。"""
     results: dict[str, list[dict]] = {c: [] for c in code_dates}
     all_dates = sorted({d for s in code_dates.values() for d in s})
     if not all_dates:
@@ -523,30 +612,13 @@ def fetch_szse_batch(code_dates: dict[str, set[str]]) -> dict[str, list[dict]]:
     cursor = start_d
     while cursor <= end_d:
         seg_end = min(cursor + timedelta(days=180), end_d)
-        success = False
-
-        # 尝试 3 次
-        for attempt in range(3):
-            try:
-                df = ak.fund_scale_daily_szse(
-                    start_date=cursor.strftime("%Y%m%d"),
-                    end_date=seg_end.strftime("%Y%m%d"),
-                    symbol="ETF",
-                )
-                if df is not None and not df.empty:
-                    frames.append(df)
-                    success = True
-                    break  # 成功则跳出重试循环
-                else:
-                    print(f"  [警告] 深交所 {cursor}~{seg_end} 返回为空 (尝试 {attempt + 1}/3)")
-            except Exception as e:
-                print(f"  [警告] 深交所 {cursor}~{seg_end} 请求异常 (尝试 {attempt + 1}/3): {type(e).__name__}: {e}")
-
-            if attempt < 2:
-                time.sleep(3)  # 失败后等 3 秒再试
-
-        if not success:
-            print(f"  [错误] 深交所 {cursor}~{seg_end} 彻底失败。")
+        # 与上交所/全流程共用同一套重试参数（AMC_ETF_FETCH_ATTEMPTS / AMC_ETF_FETCH_WAIT）
+        df = retry_fixed(lambda c0=cursor, c1=seg_end: szse_frame(c0, c1),
+                         label=f"深交所 {cursor}~{seg_end}")
+        if df is not None and not df.empty:
+            frames.append(df)
+        else:
+            print(f"  [错误] 深交所 {cursor}~{seg_end} 没取到数据。")
 
         cursor = seg_end + timedelta(days=1)
 
@@ -570,7 +642,7 @@ def fetch_szse_batch(code_dates: dict[str, set[str]]) -> dict[str, list[dict]]:
         sub = df[(df["_code"] == c) & (df["_date"].isin(dates))].copy()
         if sub.empty:
             continue
-        sub["shares_yi"] = (pd.to_numeric(sub["基金份额"], errors="coerce") / 1e8).round(2)
+        sub["shares_yi"] = pd.to_numeric(sub["份额_亿份"], errors="coerce").round(2)
         sub = sub.dropna(subset=["shares_yi"]).drop_duplicates("_date")
         for _, r in sub.iterrows():
             results[c].append({"date": r["_date"], "shares_yi": float(r["shares_yi"])})
@@ -688,13 +760,12 @@ def run_update(snapshot_date: date, sector_map: dict[str, str] | None = None):
             series[code] = merge_series(series.get(code, []), pts)
             print(f"  {code}：本次新增 {len(pts)} 个点，合并后 {len(series[code])} 个。")
 
-    # ---- 【修复】快照日当晚的有限重试 ----
-    # 实测：上交所份额 20:00 前后就更新，深交所最晚，23:00 之后基本全部刷新；
-    # 但深交所偶尔在 23:00 那一刻还没落库，一次抓不到就等到第二天，页面白停一天。
-    # 这里只针对「快照日这一天」重试（不动历史缺口，历史缺口由 compute_missing 每天自愈），
-    # 重试次数/间隔可用 AMC_ETF_FETCH_ATTEMPTS / AMC_ETF_FETCH_WAIT(秒) 调。
-    attempt_total = max(1, int(os.getenv("AMC_ETF_FETCH_ATTEMPTS", "3")))
-    attempt_wait = max(1, int(os.getenv("AMC_ETF_FETCH_WAIT", "90")))
+    # ---- 【方案A】深市那一次可能拿不全，就再抓一次 ----
+    # 深交所份额 T 日数据是最晚落库的（实测当晚 23:10 还没有、次日早上才齐），
+    # 早上 08:06 跑时通常一次就能拿全；这里只保留“3 次 × 10 秒”兜接口抖动/部分页没返回，
+    # 且只针对快照日这一天（历史缺口交给 compute_missing 每天自愈）。
+    # 次数/间隔可用 AMC_ETF_FETCH_ATTEMPTS / AMC_ETF_FETCH_WAIT(秒) 调。
+    attempt_total, attempt_wait = FETCH_ATTEMPTS, FETCH_WAIT
     snap_str = snapshot_date.strftime("%Y-%m-%d")
 
     def missing_on(snap: str):
@@ -761,20 +832,11 @@ def run_update(snapshot_date: date, sector_map: dict[str, str] | None = None):
 def main():
 
     # 交易日判断已上移到 common/central_control.py：非交易日不会调用本脚本。
-    # 【修复】快照日取 T 日（当天），不再固定取 T-1：
-    # 实测上交所份额 20:00 前后就更新、深交所最晚，23:00 之后两只所都已刷新，
-    # 原来「两个交易所都是 T+1 定稿」的假设不成立，取 T-1 会让页面白停一天。
-    # 当晚个别代码深交所还没落库时，run_update 里的 T 日重试会再抓两轮；
-    # 仍拿不到的，次日跑批按缺失日期自动补齐（compute_missing 本来就按交易日历补）。
-    today_str = os.environ.get("AMC_TODAY") or date.today().isoformat()
-    today_date = date.fromisoformat(today_str)
-    if common.is_trading_day(today_date):
-        snapshot_date = today_date
-        print(f"快照日（T 日）：{snapshot_date}")
-    else:
-        # 手工加 --force 复盘时今天不是交易日，退回最近一个交易日
-        snapshot_date = common.last_trade_date()
-        print(f"快照日（今天非交易日，取最近交易日）：{snapshot_date}")
+    # 【方案A】快照日与 END_DATE 保持一致：早上 08:06 跑 → 取上一交易日（T 日，已是完整数据）；
+    # 当天 21:00 后手动补跑 → 取当天（此时沪市份额已更新，深市可能还差一点，
+    # 由 run_update 的两次抓取兜底，仍缺的第二天早上自动补齐）。
+    snapshot_date = END_DATE
+    print(f"快照日（T 日 = {snapshot_date}）：按 T+1 早上跑批口径取数")
 
     # 池审查仍按「已定稿」的最近交易日算：审查要一次拿到全市场规模，
     # 而审查日（每月 2 号）的份额当晚可能还没刷全，用最近已定稿日更稳。

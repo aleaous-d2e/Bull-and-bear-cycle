@@ -31,7 +31,7 @@
     }
   };
 
-  // 当前主题：优先看 <html> 上的类（theme-boot.js 在 head 里已经先设好）
+  // 当前主题：优先看 <html> 上的类（由本文件 initTheme 打到 documentElement 上）
   const currentTheme = () => {
     if (document.documentElement.classList.contains('theme-light')) return 'light';
     if (document.documentElement.classList.contains('theme-dark')) return 'dark';

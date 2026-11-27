@@ -90,38 +90,36 @@ def parse_cn_month(s):
     return f"{mm.group(1)}-{int(mm.group(2)):02}" if mm else None
 
 
-def fetch_m1():
+def _month_map(fetch_df, key_col, val_col, label, digits, key=None):
+    """把“月度接口”的 DataFrame 收成 {月份: 数值}。
+
+    M1 同比、新增开户数原来各抄一份同样的循环，只剩“列名 / 取月方式 / 小数位”不同，
+    合到这里：key 为 None 时按 parse_cn_month 解析中文月份，否则用 key(r) 自己取。
+    """
     out = {}
 
     def _go():
-        import akshare as ak
-        df = ak.macro_china_money_supply_em()
+        df = fetch_df()
         for _, r in df.iterrows():
-            ym = parse_cn_month(r["月份"])
-            v = r["货币(M1)-同比增长"]
-            if ym and v == v:
-                out[ym] = round(float(v), 1)
+            ym = parse_cn_month(r[key_col]) if key is None else key(r)
+            v = r[val_col]
+            if ym and v == v:          # v == v 用来挡 NaN
+                out[ym] = round(float(v), digits)
         return True
 
-    common.with_retry(_go, times=2, delay=1.0, label="M1")
+    common.with_retry(_go, times=2, delay=1.0, label=label)
     return out
+
+
+def fetch_m1():
+    import akshare as ak
+    return _month_map(ak.macro_china_money_supply_em, "月份", "货币(M1)-同比增长", "M1", 1)
 
 
 def fetch_accounts():
-    out = {}
-
-    def _go():
-        import akshare as ak
-        df = ak.stock_account_statistics_em()
-        for _, r in df.iterrows():
-            ym = str(r["数据日期"])[:7]
-            v = r["新增投资者-数量"]
-            if ym and v == v:
-                out[ym] = round(float(v), 2)
-        return True
-
-    common.with_retry(_go, times=2, delay=1.0, label="开户")
-    return out
+    import akshare as ak
+    return _month_map(ak.stock_account_statistics_em, "数据日期", "新增投资者-数量", "开户", 2,
+                      key=lambda r: str(r["数据日期"])[:7])
 
 
 def local_peak(series, top, window=WINDOW_MONTHS):

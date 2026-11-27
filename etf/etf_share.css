@@ -171,10 +171,11 @@
   border-collapse: collapse;
   font-size: 11.5px;
   table-layout: fixed;
+  min-width: 438px;   /* 原文件后段单独补过一次，已并入 */
 }
 /* 【修复】列宽由 colgroup 固定，名称列只占剩余空间并省略号显示 */
 .announcement-board table { min-width: 332px; }
-.leaderboard-board table { min-width: 438px; }
+
 .announcement-board .cell-name,
 .leaderboard-board .cell-name {
   overflow: hidden;
@@ -185,6 +186,7 @@
 .announcement-board td,
 .leaderboard-board th,
 .leaderboard-board td {
+  color: var(--text);   /* 原文件后段单独补过一次，已并入 */
   text-align: left;
   padding: 6px 5px;
   border-bottom: 1px solid var(--line);
@@ -219,7 +221,7 @@
 }
 
 .announcement-board td,
-.leaderboard-board td { color: var(--text); }
+
 .announcement-board tr:last-child td,
 .leaderboard-board tr:last-child td { border-bottom: none; }
 

@@ -5,13 +5,13 @@ A股全市场总市值 + 平均股价 —— 单日模式，写入 market_data.j
 功能:
   - 今天是否交易日由总调度（common/central_control.py）统一判断，本脚本不再自己判断：
         - 不是交易日（周末/节假日）-> 调度根本不会调用本脚本
-        - 是交易日                -> 取当天数据（调度放在 22:00 之后跑，收盘数据已发布）
+        - 是交易日                -> 取 T 日数据（早上 08:06 跑到的是上一交易日；16 点后手工补跑取当天）
   - 沪深：api.finance_valuation 拉目标日期总市值（沪 / 深 / 合计）
   - 北交所：只请求一次，提取目标日期总市值（不做全量缓存）
   - 平均股价：api.daily 拉目标日全市场平均收盘价（close > 0 且 vol > 0）
   - 把结果合并进 market_data.js（同日期自动更新）
   - market_data.js 中 ashare 按日期降序排列（最新在前）
-  - 定时任务：每个交易日 22:00 之后触发 common/central_control.py，交易日判断由调度负责
+  - 定时任务：T+1 早上 08:06 触发 common/central_control.py，交易日判断与目标日都由调度/公共函数负责
 =========================================================
 
 公共部分（交易日历、market_data.js 读写、退避重试）已抽到 common 包（common/__init__.py）。
@@ -63,7 +63,7 @@ api = DataApi(token=ZZSHARE_TOKEN) if ZZSHARE_TOKEN else DataApi()
 
 
 # 【改动】原来这里有个 get_prev_trade_date()，取严格早于今天的交易日。
-# 现在调度挪到 22:00 之后跑，当天数据已经发布，直接以当天为目标日，这个函数不再需要。
+# 现在目标日统一由 common.data_target_date() 算（早上跑=T 日、16 点后跑=当天），这个函数不再需要。
 
 
 # ==================== 北交所：只取目标日期总市值 ====================
@@ -95,7 +95,7 @@ def get_bse_mv(trade_date):
 
 
 # ==================== 沪深：单日拉取 + 指数退避 ====================
-def get_ashare_total_mv(date_str, retries=2):
+def get_ashare_total_mv(date_str):
     """带指数退避重试的沪深全市场总市值获取"""
 
     def _fetch():
@@ -110,7 +110,7 @@ def get_ashare_total_mv(date_str, retries=2):
 
         return total, sse_mv, szse_mv
 
-    result = common.with_retry(_fetch, times=retries, label=f"zzshare {date_str}")
+    result = common.with_retry(_fetch, label=f"zzshare {date_str}")
     return result if result else (None, None, None)
 
 
@@ -161,10 +161,11 @@ def run_once():
     # 只有交易日才会调用本脚本，这里不再重复请求交易日历。
     # 单独手动跑也不会误写：非交易日跑只是把最近那个交易日重抓一遍，结果幂等。
 
-    # ---------- 目标日 = 当天 ----------
-    # 22:00 之后当天收盘的总市值、均价都已发布，不再往前取 T-1。
-    today_str = datetime.date.today().strftime("%Y-%m-%d")
-    target_date = today_str
+    # ---------- 【方案A】目标日 = 最近一个已收盘的交易日 ----------
+    # 跑批统一挪到「T+1 早上 08:06」后，当天还没有收盘数据可抓，
+    # 所以这里不再写死 today：早上跑自动取上一交易日（T 日），
+    # 只有当天 16:00 之后手动补跑才取当天，避免早上那次误写一条空数据。
+    target_date = common.data_target_date(evening_hour=16).isoformat()
 
     print(f"\n{'=' * 60}")
     print(f"目标交易日: {target_date}")

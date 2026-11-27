@@ -21,7 +21,7 @@ import json
 import os
 import re
 import sys
-from datetime import date, timedelta
+from datetime import date
 
 import akshare as ak
 import pandas as pd
@@ -158,23 +158,8 @@ def fetch_below_net_rows(after_date=None):
     return rows
 
 
-def fetch_below_net_latest():
-    """
-    【模块 1】调用 AkShare 接口，获取【全A股】的最新破净数据。
-    注意：这里是全市场统计接口，所以请求较重，每天只执行一次。
-    返回：日期、破净数、总股票数、破净比例。
-    """
-    df = ak.stock_a_below_net_asset_statistics(symbol="全部A股")
-    if df is None or df.empty:
-        raise RuntimeError("AKShare 破净接口返回空数据")
-    df = df.sort_values("date")
-    latest = df.iloc[-1]
-    return {
-        "date": str(latest["date"]),
-        "below": int(latest["below_net_asset"]),
-        "total": int(latest["total_company"]),
-        "ratio": float(latest["below_net_asset_ratio"]),
-    }
+# 【已删】被 fetch_below_net_rows 取代的 fetch_below_net_latest（只取接口最新一行，
+# 中间漏跑的日子永远补不回来）已移除，破净统一走批量补齐。
 
 
 def fetch_index_close(date_str):
@@ -184,11 +169,10 @@ def fetch_index_close(date_str):
     与后面的“月K线”毫无关系。
     """
     ymd = date_str.replace("-", "")
-    df = ak.index_zh_daily_tx(symbol="sh000001", start_date=ymd, end_date=ymd)
+    df, _ = daily_any("sh000001", ymd, ymd)   # 腾讯失败自动换新浪，列名已在里面统一
     if df is None or df.empty:
-        raise RuntimeError(f"腾讯源未返回 {date_str} 的指数数据")
-    close_col = "close" if "close" in df.columns else "收盘"
-    return float(df.iloc[-1][close_col])
+        raise RuntimeError(f"腾讯/新浪均未返回 {date_str} 的指数数据")
+    return float(df["close"].iloc[-1])
 
 
 def prepend_row(row):
@@ -292,6 +276,21 @@ def daily_from_sina(symbol: str, start_date: str, end_date: str):
         return None
 
 
+def daily_any(symbol: str, start_date: str, end_date: str):
+    """【模块 2】腾讯优先、失败换新浪，返回 (日线 df, 数据源名)；都失败返回 (None, None)。
+
+    原来 update_monthly_data 和 update_current_month 各抄了一遍这段 fallback，
+    改一处漏一处的风险太高，统一收在这里。
+    """
+    df = daily_from_tx(symbol, start_date, end_date)
+    if df is not None and not df.empty:
+        return df, "腾讯"
+    df = daily_from_sina(symbol, start_date, end_date)
+    if df is not None and not df.empty:
+        return df, "新浪"
+    return None, None
+
+
 def resample_monthly(df: pd.DataFrame) -> list:
     """
     【模块 2】将日线数据按自然月重采样为月线。
@@ -362,14 +361,9 @@ def update_monthly_data():
             fetch_start = DEFAULT_START_DATE
             print(f"  {name}: 无历史数据，从 {fetch_start} 全量拉取...")
 
-        # 走腾讯接口优先，失败换新浪
-        df = daily_from_tx(symbol, fetch_start, today_str)
-        source = "腾讯"
-        if df is None or df.empty:
-            df = daily_from_sina(symbol, fetch_start, today_str)
-            source = "新浪"
-
-        if df is None or df.empty:
+        # 走腾讯接口优先，失败换新浪（统一在 daily_any 里）
+        df, source = daily_any(symbol, fetch_start, today_str)
+        if df is None:
             print(f"    ❌ {name} 获取失败或近期无数据，跳过。")
             continue
 
@@ -428,11 +422,7 @@ def update_current_month():
 
     for symbol, name in INDICES.items():
         # 本月还没交易过（比如 1 号就是周末）就跳过，避免抓到空数据
-        df = daily_from_tx(symbol, month_start, today_str)
-        source = "腾讯"
-        if df is None or df.empty:
-            df = daily_from_sina(symbol, month_start, today_str)
-            source = "新浪"
+        df, source = daily_any(symbol, month_start, today_str)
         if df is None or df.empty:
             print(f"  {name}: 本月暂无日线数据（今日未收盘或接口未发布），跳过。")
             continue
@@ -524,16 +514,25 @@ def margin_normalize(payload):
     return payload
 
 
-def sse_margin(date):
-    """上交所两融 → (融资余额, 融资买入额, 融券余额, 两融余额)，亿元。"""
-    df = common.with_retry(lambda: ak.stock_margin_sse(start_date=date.replace("-", ""),
-                                                      end_date=date.replace("-", "")),
-                           times=2, label=f"上交所两融 {date}")
+def _ak_margin(fn, label, divisor, short_col="融券余额", idx=0):
+    """调一次 akshare 两融接口 → (融资余额, 融资买入额, 融券余额, 两融余额)，统一换算成亿元。
+
+    上交所 / 北交所两份实现除了“取首行还是末行、融券列名、万元还是元”之外完全一样，
+    原来各写一遍，现在只留这一份。
+    """
+    df = common.with_retry(fn, times=2, label=label)
     if df is None or df.empty:
         return None
-    row = df.iloc[0]
-    return (float(row["融资余额"]) / YI, float(row["融资买入额"]) / YI,
-            float(row["融券余量金额"]) / YI, float(row["融资融券余额"]) / YI)
+    row = df.iloc[idx]
+    return (float(row["融资余额"]) / divisor, float(row["融资买入额"]) / divisor,
+            float(row[short_col]) / divisor, float(row["融资融券余额"]) / divisor)
+
+
+def sse_margin(date):
+    """上交所两融 → (融资余额, 融资买入额, 融券余额, 两融余额)，亿元。"""
+    ymd = date.replace("-", "")
+    return _ak_margin(lambda: ak.stock_margin_sse(start_date=ymd, end_date=ymd),
+                      label=f"上交所两融 {date}", divisor=YI, short_col="融券余量金额")
 
 
 def szse_margin(date):
@@ -594,13 +593,8 @@ def szse_margin(date):
 
 def bse_margin(date):
     """北交所两融（万元）→ (融资余额, 融资买入额, 融券余额, 两融余额)，亿元。"""
-    df = common.with_retry(lambda: ak.stock_margin_bse(date=date.replace("-", "")),
-                           times=2, label=f"北交所两融 {date}")
-    if df is None or df.empty:
-        return None
-    row = df.iloc[-1]
-    return (float(row["融资余额"]) / WAN, float(row["融资买入额"]) / WAN,
-            float(row["融券余额"]) / WAN, float(row["融资融券余额"]) / WAN)
+    return _ak_margin(lambda: ak.stock_margin_bse(date=date.replace("-", "")),
+                      label=f"北交所两融 {date}", divisor=WAN, idx=-1)
 
 
 def em_snapshot(date):
@@ -662,8 +656,8 @@ def update_margin_data():
     print("\n--- 开始更新每日两融余额 (MARGIN_DATA) ---")
     js = margin_resolve_js()
     target = common.last_trade_date().isoformat()   # 严格早于今天 = T-1
-    # 【说明·非 bug】两融余额由交易所 T+1 才公布：T 日晚 23:00 跑批时目标取 T-1，
-    # 到了 T+1 晚 23:00 那次，last_trade_date() 正好是 T 日，于是这一跑就拿回 T 日的两融数据。
+    # 【说明·非 bug】两融余额由交易所 T+1 才公布：T+1 早上 08:06 那一跑，last_trade_date()
+    # 正好是 T 日，于是拿回的是 T 日的两融；万一交易所还没发布，下一次跑批自动补齐。
     end, stale = margin_peek_meta(js)
     print(f"  js 里 end={end}，T-1 交易日={target}")
 
@@ -695,7 +689,7 @@ def update_margin_data():
         print(f"  {date_str}：两融 {row[1]} 亿")
 
     margin_normalize(payload)
-    common.write_js_json(js, MARGIN_VAR, payload, indent=None, newline=True, atomic=True)
+    common.write_js_json(js, MARGIN_VAR, payload, indent=None)
     print(f"  ✅ 已更新 {js}：{payload['meta']['count']} 行，最新 {payload['meta']['end']}")
 
 
